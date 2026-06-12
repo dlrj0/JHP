@@ -427,3 +427,23 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+
+# 배포 결과물
+output/
+bin/
+obj/
+
+# 개인 설정
+config.json
+
+# WebView2 캐시
+cache/
+
+# mp3 파일 (저작권)
+alarm/*.mp3
+
+# VS 개인 설정
+*.user
+*.suo
+.vs/
