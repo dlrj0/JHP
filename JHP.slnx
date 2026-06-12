@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="JHP.Api/JHP.Api.csproj" Id="5c98bd75-687a-465e-b076-d21e9d8eb3ff" />
+  <Project Path="JHP.Asset/JHP.Asset.csproj" Id="17a3d421-1e4a-4cde-828c-a58daf6ab1b8" />
+  <Project Path="JHP.Controls/JHP.Controls.csproj" Id="1fba9275-d96d-42da-a0d2-fbd5ab28a09c" />
+  <Project Path="JHP/JHP.csproj" Id="46d0fa9e-d687-495a-b790-68ab36bf87ee" />
+</Solution>
