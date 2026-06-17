@@ -19,15 +19,16 @@ namespace JHP
         }
 
         private System.Windows.Forms.Timer timer;
+        private ToolTip toolTip;
 
         private Panel pnlTitleBar;
         private Label lblTitle;
-        private Label lblNextAlarm;
+        private TimerButton timerButton;
         private Label lblVolumeValue;
         private Label lblOpacityValue;
         private NSlider sliderVolume;
         private NSlider sliderOpacity;
-        private Button btnAlarmSettings;
+        private TextBox tbInlineEdit;
         private ControlButton btnMinimize;
         private ControlButton btnMaximize;
         private ControlButton btnClose;
@@ -50,15 +51,16 @@ namespace JHP
         {
             components = new System.ComponentModel.Container();
             timer = new System.Windows.Forms.Timer(components) { Interval = 1000 };
+            toolTip = new ToolTip(components);
 
             pnlTitleBar = new Panel();
             lblTitle = new Label();
-            lblNextAlarm = new Label();
+            timerButton = new TimerButton();
             lblVolumeValue = new Label();
             lblOpacityValue = new Label();
             sliderVolume = new NSlider();
             sliderOpacity = new NSlider();
-            btnAlarmSettings = new Button();
+            tbInlineEdit = new TextBox();
             btnMinimize = new ControlButton();
             btnMaximize = new ControlButton();
             btnClose = new ControlButton();
@@ -90,66 +92,63 @@ namespace JHP
             lblTitle.Location = new Point(12, 9);
             lblTitle.Text = "JHP";
 
-            lblNextAlarm.AutoSize = true;
-            lblNextAlarm.ForeColor = Color.FromArgb(150, 200, 255);
-            lblNextAlarm.Location = new Point(64, 10);
-            lblNextAlarm.Text = "⏱ 클릭하여 시작";
-            lblNextAlarm.Cursor = Cursors.Hand;
+            // 재획비 타이머 아이콘 버튼: 좌클릭 시작/정지 토글, 우클릭 알람 설정 팝업 (Form1.cs에서 이벤트 연결)
+            timerButton.Location = new Point(54, 3);
 
             lblVolumeValue.AutoSize = true;
+            lblVolumeValue.Cursor = Cursors.Hand;
             lblVolumeValue.ForeColor = Color.LightGray;
-            lblVolumeValue.Location = new Point(330, 10);
+            lblVolumeValue.Location = new Point(110, 10);
             lblVolumeValue.Text = "볼륨 50";
 
-            sliderVolume.Location = new Point(388, 11);
-            sliderVolume.Size = new Size(90, 20);
+            sliderVolume.Location = new Point(190, 11);
+            sliderVolume.Size = new Size(170, 20);
             sliderVolume.Minimum = 0;
             sliderVolume.Maximum = 100;
 
             lblOpacityValue.AutoSize = true;
+            lblOpacityValue.Cursor = Cursors.Hand;
             lblOpacityValue.ForeColor = Color.LightGray;
-            lblOpacityValue.Location = new Point(490, 10);
+            lblOpacityValue.Location = new Point(372, 10);
             lblOpacityValue.Text = "투명도 100%";
 
-            sliderOpacity.Location = new Point(570, 11);
-            sliderOpacity.Size = new Size(90, 20);
+            sliderOpacity.Location = new Point(472, 11);
+            sliderOpacity.Size = new Size(170, 20);
             sliderOpacity.Minimum = 30;
             sliderOpacity.Maximum = 100;
 
-            btnAlarmSettings.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnAlarmSettings.BackColor = Color.FromArgb(28, 28, 28);
-            btnAlarmSettings.FlatStyle = FlatStyle.Flat;
-            btnAlarmSettings.FlatAppearance.BorderSize = 0;
-            btnAlarmSettings.ForeColor = Color.White;
-            btnAlarmSettings.Location = new Point(818, 4);
-            btnAlarmSettings.Size = new Size(36, 28);
-            btnAlarmSettings.Text = "⏰";
-            btnAlarmSettings.UseVisualStyleBackColor = false;
+            // 볼륨/투명도 숫자 클릭 시 직접입력용 임시 텍스트박스 (편집 중에만 보임)
+            tbInlineEdit.Visible = false;
+            tbInlineEdit.Width = 50;
+            tbInlineEdit.TextAlign = HorizontalAlignment.Center;
+            tbInlineEdit.BackColor = Color.FromArgb(50, 50, 50);
+            tbInlineEdit.ForeColor = Color.White;
+            tbInlineEdit.BorderStyle = BorderStyle.FixedSingle;
 
-            // ControlButton은 Dock=Right 사용 (Anchor+Location 사용 시 리사이즈에서 잘림)
-            btnClose.Dock = DockStyle.Right;
-            btnClose.Type = ControlButton.ButtonType.Close;
-
-            btnMaximize.Dock = DockStyle.Right;
-            btnMaximize.Type = ControlButton.ButtonType.Maximize;
-
-            btnMinimize.Dock = DockStyle.Right;
+            btnMinimize.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnMinimize.Location = new Point(862, 3);
             btnMinimize.Type = ControlButton.ButtonType.Minimize;
 
-            // Dock=Right는 AddRange 순서대로 오른쪽→왼쪽 배치
-            // Close가 맨 오른쪽이 되려면 Close 먼저
+            btnMaximize.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnMaximize.Location = new Point(908, 3);
+            btnMaximize.Type = ControlButton.ButtonType.Maximize;
+
+            btnClose.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnClose.Location = new Point(954, 3);
+            btnClose.Type = ControlButton.ButtonType.Close;
+
             pnlTitleBar.Controls.Add(lblTitle);
-            pnlTitleBar.Controls.Add(lblNextAlarm);
+            pnlTitleBar.Controls.Add(timerButton);
             pnlTitleBar.Controls.Add(lblVolumeValue);
             pnlTitleBar.Controls.Add(sliderVolume);
             pnlTitleBar.Controls.Add(lblOpacityValue);
             pnlTitleBar.Controls.Add(sliderOpacity);
-            pnlTitleBar.Controls.Add(btnAlarmSettings);
+            pnlTitleBar.Controls.Add(tbInlineEdit);
             pnlTitleBar.Controls.Add(btnMinimize);
             pnlTitleBar.Controls.Add(btnMaximize);
             pnlTitleBar.Controls.Add(btnClose);
 
-            // ===== 메뉴바 =====
+            // ===== 메뉴바 ===== (이번 작업 범위 아님 — V버튼 흡수는 다음 단계에서 별도 진행)
             pnlMenuBar.Dock = DockStyle.Top;
             pnlMenuBar.Height = 28;
             pnlMenuBar.BackColor = Color.FromArgb(40, 40, 40);
@@ -175,7 +174,7 @@ namespace JHP
 
             pnlMenuBar.Controls.Add(menuStrip);
 
-            // ===== 사이드바 =====
+            // ===== 사이드바 ===== (이번 작업 범위 아님)
             pnlSidebar.Dock = DockStyle.Left;
             pnlSidebar.Width = 180;
             pnlSidebar.BackColor = Color.FromArgb(30, 30, 30);
@@ -206,6 +205,7 @@ namespace JHP
 
             pnlSidebarBottom.Controls.Add(btnAddSite);
             pnlSidebarBottom.Controls.Add(btnRemoveSite);
+
             pnlSidebar.Controls.Add(siteList);
             pnlSidebar.Controls.Add(pnlSidebarBottom);
 
@@ -221,12 +221,10 @@ namespace JHP
             FormBorderStyle = FormBorderStyle.None;
             Text = "JHP";
 
-            // Controls.Add 순서가 핵심:
-            // Dock=Fill/Left는 먼저, Dock=Top은 나중에 추가할수록 위에 표시됨
-            Controls.Add(webView);       // Fill (가장 먼저)
-            Controls.Add(pnlSidebar);    // Left
-            Controls.Add(pnlMenuBar);    // Top (타이틀바 아래)
-            Controls.Add(pnlTitleBar);   // Top (마지막 = 최상단)
+            Controls.Add(pnlTitleBar);
+            Controls.Add(pnlMenuBar);
+            Controls.Add(pnlSidebar);
+            Controls.Add(webView);
 
             ResumeLayout(false);
         }
