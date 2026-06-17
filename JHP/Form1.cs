@@ -24,6 +24,18 @@ public partial class Form1 : Form
     public Form1()
     {
         InitializeComponent();
+
+        // 작업표시줄/Alt-Tab 아이콘 (Resources/app.ico — csproj에서 출력 폴더로 복사됨)
+        // InitializeComponent()가 아닌 여기서 처리: 디자이너의 CodeDom 파서는
+        // try/catch나 if문이 섞인 코드를 이해하지 못해 디자이너 오류를 일으킴
+        try
+        {
+            string iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "app.ico");
+            if (File.Exists(iconPath))
+                Icon = new Icon(iconPath);
+        }
+        catch { /* 아이콘 파일이 없어도 앱 동작에는 영향 없음 */ }
+
         Load += Form1_Load;
         FormClosing += Form1_FormClosing;
         Activated += Form1_Activated;
