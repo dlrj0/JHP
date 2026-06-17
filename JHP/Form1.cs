@@ -2,7 +2,6 @@ using JHP.Api;
 using JHP.Asset;
 using JHP.Controls;
 using Microsoft.Web.WebView2.Core;
-using Microsoft.Web.WebView2.WinForms;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -10,390 +9,391 @@ namespace JHP;
 
 public partial class Form1 : Form
 {
-    // [0]=2h [1]=1h [2]=30m [3]=20m [4]=15m [5]=10m [6]=100s [7]=55s
+    // ─────────────────────────────────────────────────────────────
+    // 알람 상수
+    // ─────────────────────────────────────────────────────────────
     private static readonly int[] AlarmSeconds =
         [7200, 3600, 1800, 1200, 900, 600, 100, 55];
 
     private static readonly string[] AlarmLabels =
     [
-        "재획비 (2시간)", "경쿠 (1시간)", "열변/경쿠/오니오 (30분)",
-        "오니오 버프 (20분)", "경쿠 (15분)", "오니오 버프 (10분)",
-        "메소 히수 (100초)", "파우티 (55초)"
+        "재획비 (2시간)",       "경쿠 (1시간)",
+        "열변/경쿠/오니오 (30분)", "오니오 버프 (20분)",
+        "경쿠 (15분)",          "오니오 버프 (10분)",
+        "메소 히수 (100초)",    "파우티 (55초)"
     ];
 
     private const string CurrentVersion = "v1.0.0";
-    private const int    TITLE_HEIGHT   = 32;
+    private const int TitleHeight = 32;
+    private const int AlarmPanelWidth = 240;
 
-    private readonly Config _config          = Config.Instance;
-    private readonly int[]  _remaining       = new int[8];
-    private readonly int[]  _customRemaining = new int[3];
-    private bool _timerRunning;
+    // ─────────────────────────────────────────────────────────────
+    // 레이아웃 컨트롤
+    // ─────────────────────────────────────────────────────────────
+    private Panel _titleBar = null!;
+    private WebView2 _webView = null!;
+    private Panel _alarmPanel = null!;
+    private SplitContainer _split = null!;
 
-    // ─────────────────────────────────────────────
-    //  생성자
-    // ─────────────────────────────────────────────
+    // 타이틀바 컨트롤
+    private ControlButton _btnClose = null!;
+    private ControlButton _btnMax = null!;
+    private ControlButton _btnMin = null!;
+    private ComboBox _cmbSite = null!;
+    private CheckBox _cbTopMost = null!;
+    private CheckBox _cbHideBorder = null!;
+
+    // 알람 패널 컨트롤
+    private readonly CheckBox[] _alarmChecks = new CheckBox[8];
+    private readonly TextBox[] _customNames = new TextBox[3];
+    private readonly NumericUpDown[] _customTicks = new NumericUpDown[3];
+    private readonly CheckBox[] _customEnabled = new CheckBox[3];
+    private ComboBox _cmbAlarmFile = null!;
+    private NSlider _sliderVolume = null!;
+    private Label _lblVolume = null!;
+    private CheckBox _cbTts = null!;
+    private NSlider _sliderRate = null!;
+
+    // 타이머
+    private System.Windows.Forms.Timer _timer = null!;
+    private readonly int[] _remaining = new int[8];
+    private readonly int[] _customRemaining = new int[3];
+    private bool _timerRunning = false;
+
+    // ─────────────────────────────────────────────────────────────
+    // 생성자
+    // ─────────────────────────────────────────────────────────────
     public Form1()
     {
         InitializeComponent();
-        Load         += Form1_Load;
-        FormClosing  += Form1_FormClosing;
-        Activated    += Form1_Activated;
-        Deactivate   += Form1_Deactivate;
     }
 
-    // ─────────────────────────────────────────────
-    //  LOAD
-    // ─────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────
+    // Form Load
+    // ─────────────────────────────────────────────────────────────
     private async void Form1_Load(object? sender, EventArgs e)
     {
-        InitControls();          // 컨트롤 생성 및 배치
-        LoadConfigToControls();  // Config → 컨트롤 값 반영
-        LoadSites();             // 사이트 목록 로드
-        LoadAlarmFiles();        // alarm/ 폴더 mp3 목록
+        // 1. 타이머 먼저 생성 (InitControls에서 이벤트 연결)
+        _timer = new System.Windows.Forms.Timer { Interval = 1000 };
 
-        timer          = new System.Windows.Forms.Timer { Interval = 1000 };
-        timer.Tick    += Timer_Tick;
-        timer.Start();           // 타이머는 항상 구동, _timerRunning 플래그로 카운트 제어
-        ResetTimerState();
+        // 2. 컨트롤 구성
+        InitControls();
 
-        // SplitContainer 크기는 폼 레이아웃 완료 후에 알 수 있으므로 BeginInvoke 사용
-        BeginInvoke(() =>
-        {
-            if (splitMain.Width > 260)
-                splitMain.SplitterDistance = splitMain.Width - 240;
-        });
+        // 3. Config 불러와서 UI 반영
+        LoadConfigToControls();
+        LoadSites();
+        LoadAlarmFiles();
 
+        // 4. 창 크기/위치 복원 (LoadConfigToControls 이후)
+        var cfg = Config.Instance;
+        if (cfg.Width > 0 && cfg.Height > 0)
+            Size = new Size(
+                Math.Max(cfg.Width, MinimumSize.Width),
+                Math.Max(cfg.Height, MinimumSize.Height));
+
+        if (IsOnScreen(cfg.X, cfg.Y))
+            Location = new Point(cfg.X, cfg.Y);
+
+        if (cfg.IsMaximize)
+            WindowState = FormWindowState.Maximized;
+
+        // 5. WebView2 초기화 (비동기)
         await InitWV();
+
+        // 6. 업데이트 확인 (fire and forget)
         _ = CheckUpdateAsync();
     }
 
-    // ─────────────────────────────────────────────
-    //  UI 구성 — InitControls
-    // ─────────────────────────────────────────────
+    private static bool IsOnScreen(int x, int y)
+    {
+        foreach (Screen s in Screen.AllScreens)
+            if (s.WorkingArea.Contains(x, y)) return true;
+        return false;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 컨트롤 구성 (InitControls)
+    // ─────────────────────────────────────────────────────────────
     private void InitControls()
     {
         SuspendLayout();
 
-        // ══════════════════════════════════════
-        //  타이틀바
-        // ══════════════════════════════════════
-        pnlTitleBar = new Panel
+        // ── 타이틀바 ──────────────────────────────────────────────
+        _titleBar = new Panel
         {
-            Dock      = DockStyle.Top,
-            Height    = TITLE_HEIGHT,
+            Dock = DockStyle.Top,
+            Height = TitleHeight,
             BackColor = Color.FromArgb(28, 28, 28)
         };
-        pnlTitleBar.MouseDown += TitleBar_MouseDown;
 
-        // 창 컨트롤 버튼 — Dock=Right 사용 (Location 고정 금지: 창 크기 변경 시 잘림)
-        btnClose    = new ControlButton { Type = ControlButton.ButtonType.Close,    Dock = DockStyle.Right };
-        btnMaximize = new ControlButton { Type = ControlButton.ButtonType.Maximize, Dock = DockStyle.Right };
-        btnMinimize = new ControlButton { Type = ControlButton.ButtonType.Minimize, Dock = DockStyle.Right };
+        // ControlButton 3개: Dock=Right → AddRange 시 Close 먼저
+        _btnClose = new ControlButton
+        {
+            Type = ControlButton.ButtonType.Close,
+            Dock = DockStyle.Right
+        };
+        _btnMax = new ControlButton
+        {
+            Type = ControlButton.ButtonType.Maximize,
+            Dock = DockStyle.Right
+        };
+        _btnMin = new ControlButton
+        {
+            Type = ControlButton.ButtonType.Minimize,
+            Dock = DockStyle.Right
+        };
 
-        btnClose.Click    += (_, _) => Close();
-        btnMinimize.Click += (_, _) => WindowState = FormWindowState.Minimized;
-        btnMaximize.Click += (_, _) =>
-            WindowState = WindowState == FormWindowState.Maximized
-                ? FormWindowState.Normal : FormWindowState.Maximized;
-        SizeChanged += (_, _) => btnMaximize?.Invalidate();
-
-        // 사이트 선택 드롭다운
-        cmbSite = new ComboBox
+        // 사이트 드롭다운
+        _cmbSite = new ComboBox
         {
             DropDownStyle = ComboBoxStyle.DropDownList,
-            FlatStyle     = FlatStyle.Flat,
-            BackColor     = Color.FromArgb(40, 40, 40),
-            ForeColor     = Color.White,
-            Width         = 160,
-            Left          = 8,
-            Top           = (TITLE_HEIGHT - 22) / 2
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(40, 40, 40),
+            ForeColor = Color.White,
+            Width = 180,
+            Left = 8,
+            Top = (TitleHeight - 22) / 2
         };
-        cmbSite.SelectedIndexChanged += CmbSite_SelectedIndexChanged;
 
-        // 항상 위 체크박스
-        cbTopMost = new CheckBox
+        // 항상 위
+        _cbTopMost = new CheckBox
         {
-            Text      = "항상 위",
+            Text = "항상 위",
             ForeColor = Color.LightGray,
-            AutoSize  = true,
-            Left      = 176,
-            Top       = (TITLE_HEIGHT - 17) / 2
-        };
-        cbTopMost.CheckedChanged += (_, _) =>
-        {
-            TopMost          = cbTopMost.Checked;
-            _config.TopMost  = cbTopMost.Checked;
-            _config.Save();
+            AutoSize = true,
+            Left = 200,
+            Top = (TitleHeight - 17) / 2
         };
 
-        // 테두리 숨기기 체크박스
-        cbHideBorder = new CheckBox
+        // 테두리 숨기기
+        _cbHideBorder = new CheckBox
         {
-            Text      = "테두리 숨기기",
+            Text = "테두리 숨기기",
             ForeColor = Color.LightGray,
-            AutoSize  = true,
-            Left      = 258,
-            Top       = (TITLE_HEIGHT - 17) / 2
-        };
-        cbHideBorder.CheckedChanged += (_, _) =>
-        {
-            _config.IsHideWindowBorderOnFocusOut = cbHideBorder.Checked;
-            _config.Save();
+            AutoSize = true,
+            Left = 280,
+            Top = (TitleHeight - 17) / 2
         };
 
-        // 다음 알람 라벨 — 좌클릭: 타이머 시작/재시작 / 우클릭: 컨텍스트 메뉴
-        lblNextAlarm = new Label
+        // 타이틀바에 추가 (Dock.Right는 역순 배치이므로 Close 먼저)
+        _titleBar.Controls.AddRange(new Control[]
         {
-            Text      = "⏱ 클릭하여 시작",
-            ForeColor = Color.FromArgb(150, 200, 255),
-            AutoSize  = true,
-            Left      = 390,
-            Top       = (TITLE_HEIGHT - 15) / 2,
-            Cursor    = Cursors.Hand
-        };
-        lblNextAlarm.MouseDown += (_, e) =>
-        {
-            if (e.Button == MouseButtons.Left) StartTimer();
-        };
-        SetupTimerContextMenu(lblNextAlarm);
+            _btnClose, _btnMax, _btnMin,
+            _cbHideBorder, _cbTopMost, _cmbSite
+        });
 
-        // 타이틀바에 컨트롤 추가
-        // ⚠️ Dock=Right 버튼은 먼저 추가할수록 오른쪽에 위치 (Close → Max → Min 순서)
-        pnlTitleBar.Controls.Add(btnClose);
-        pnlTitleBar.Controls.Add(btnMaximize);
-        pnlTitleBar.Controls.Add(btnMinimize);
-        pnlTitleBar.Controls.Add(cmbSite);
-        pnlTitleBar.Controls.Add(cbTopMost);
-        pnlTitleBar.Controls.Add(cbHideBorder);
-        pnlTitleBar.Controls.Add(lblNextAlarm);
-
-        // ══════════════════════════════════════
-        //  메인 영역: WebView2 (좌) + 알람패널 (우)
-        // ══════════════════════════════════════
-        splitMain = new SplitContainer
+        // ── SplitContainer (WebView + 알람패널) ─────────────────
+        _split = new SplitContainer
         {
-            Dock            = DockStyle.Fill,
-            FixedPanel      = FixedPanel.Panel2,   // 알람패널 고정 240px
-            SplitterWidth   = 2,
+            Dock = DockStyle.Fill,
+            FixedPanel = FixedPanel.Panel2,
+            SplitterWidth = 1,
             IsSplitterFixed = true,
-            BackColor       = Color.FromArgb(50, 50, 50)  // 구분선 색
+            BackColor = Color.FromArgb(20, 20, 20)
         };
-        splitMain.Panel2MinSize = 240;
 
         // WebView2
-        webView = new WebView2
+        _webView = new WebView2
         {
-            Dock                   = DockStyle.Fill,
-            DefaultBackgroundColor = Color.FromArgb(20, 20, 20)
+            Dock = DockStyle.Fill,
+            DefaultBackgroundColor = Color.FromArgb(24, 24, 24)
         };
-        // 좌클릭 → 타이머 시작/재시작
-        webView.MouseClick += (_, e) =>
-        {
-            if (e.Button == MouseButtons.Left) StartTimer();
-        };
-        splitMain.Panel1.Controls.Add(webView);
+        _split.Panel1.Controls.Add(_webView);
 
         // 알람 패널
-        pnlAlarm = BuildAlarmPanel();
-        splitMain.Panel2.Controls.Add(pnlAlarm);
+        _alarmPanel = BuildAlarmPanel();
+        _split.Panel2.Controls.Add(_alarmPanel);
 
-        // ══════════════════════════════════════
-        //  Form에 추가 — 순서가 매우 중요!
-        //  Dock=Top 컨트롤은 나중에 추가될수록 위에 표시됨
-        //  Fill 먼저, Top 마지막
-        // ══════════════════════════════════════
-        Controls.Add(splitMain);    // Fill — 먼저 추가
-        Controls.Add(pnlTitleBar);  // Top  — 마지막 추가 = 최상단 표시
+        // !! Panel2MinSize는 SplitContainer가 Handle 생성 후 설정해야 함
+        // Form_Load 이후 시점에 설정하므로 여기서는 생략하고 아래 HandleCreated에서 처리
+        _split.HandleCreated += (s, e) =>
+        {
+            _split.Panel2MinSize = AlarmPanelWidth;
+            if (_split.Width > AlarmPanelWidth + _split.Panel1MinSize + _split.SplitterWidth)
+                _split.SplitterDistance = _split.Width - AlarmPanelWidth - _split.SplitterWidth;
+        };
+
+        // Form Controls.Add 순서: Fill 먼저, Top을 나중에 (Dock=Top은 나중 추가 = 상단)
+        Controls.Add(_split);       // Fill
+        Controls.Add(_titleBar);    // Top → 마지막 추가 = 최상단
+
+        // ── 이벤트 연결 ──────────────────────────────────────────
+        ConnectEvents();
 
         ResumeLayout(true);
     }
 
-    // ─────────────────────────────────────────────
-    //  알람 패널 구성 (우측 240px 고정)
-    // ─────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────
+    // 알람 패널 빌드
+    // ─────────────────────────────────────────────────────────────
     private Panel BuildAlarmPanel()
     {
         var panel = new Panel
         {
-            Dock       = DockStyle.Fill,
-            BackColor  = Color.FromArgb(28, 28, 28),
-            AutoScroll = true
+            Dock = DockStyle.Fill,
+            BackColor = Color.FromArgb(28, 28, 28),
+            AutoScroll = true,
+            Padding = new Padding(8)
         };
 
-        const int x = 8;
         int y = 8;
 
-        // ── 고정 알람 체크박스 8개 ──
+        // 고정 알람 체크박스 8개
         for (int i = 0; i < 8; i++)
         {
-            int idx = i;
-            alarmChecks[i] = new CheckBox
+            _alarmChecks[i] = new CheckBox
             {
-                Text      = AlarmLabels[i],
+                Text = AlarmLabels[i],
                 ForeColor = Color.White,
-                Left = x, Top = y,
-                Width = 224, Height = 22,
-                Cursor = Cursors.Hand
+                Left = 8,
+                Top = y,
+                Width = 220,
+                Height = 22
             };
-            alarmChecks[i].CheckedChanged += (_, _) =>
-                _config.AlarmEnabled[idx] = alarmChecks[idx].Checked;
-            panel.Controls.Add(alarmChecks[i]);
+            panel.Controls.Add(_alarmChecks[i]);
             y += 24;
         }
 
         y += 4;
         AddSeparator(panel, y); y += 10;
 
-        // ── 커스텀 알람 3슬롯 ──
+        // 커스텀 알람 3슬롯
         for (int i = 0; i < 3; i++)
         {
-            int idx = i;
+            _customEnabled[i] = new CheckBox { Left = 8, Top = y + 2, Width = 18, Height = 18 };
+            panel.Controls.Add(_customEnabled[i]);
 
-            customEnabled[i] = new CheckBox
+            _customNames[i] = new TextBox
             {
-                Left = x, Top = y + 2, Width = 18, Height = 18
+                Left = 30, Top = y, Width = 90,
+                BackColor = Color.FromArgb(40, 40, 40),
+                ForeColor = Color.White,
+                PlaceholderText = "이름",
+                BorderStyle = BorderStyle.FixedSingle
             };
-            customEnabled[i].CheckedChanged += (_, _) =>
-                _config.CustomAlarms[idx].Enabled = customEnabled[idx].Checked;
+            panel.Controls.Add(_customNames[i]);
 
-            customNames[i] = new TextBox
+            _customTicks[i] = new NumericUpDown
             {
-                Left            = x + 22, Top = y,
-                Width           = 88,
-                BackColor       = Color.FromArgb(40, 40, 40),
-                ForeColor       = Color.White,
-                BorderStyle     = BorderStyle.FixedSingle,
-                PlaceholderText = "이름"
-            };
-            customNames[i].TextChanged += (_, _) =>
-                _config.CustomAlarms[idx].Name = customNames[idx].Text;
-
-            customTicks[i] = new NumericUpDown
-            {
-                Left = x + 116, Top = y, Width = 66,
+                Left = 124, Top = y, Width = 65,
                 Minimum = 0, Maximum = 99999,
                 BackColor = Color.FromArgb(40, 40, 40),
                 ForeColor = Color.White
             };
-            customTicks[i].ValueChanged += (_, _) =>
-                _config.CustomAlarms[idx].Tick = (int)customTicks[idx].Value;
+            panel.Controls.Add(_customTicks[i]);
 
-            var lblSec = new Label
+            panel.Controls.Add(new Label
             {
-                Text = "초", Left = x + 186, Top = y + 3,
-                Width = 18, Height = 17, ForeColor = Color.LightGray
-            };
+                Text = "초",
+                Left = 193, Top = y + 3,
+                Width = 18,
+                ForeColor = Color.LightGray,
+                AutoSize = true
+            });
 
-            panel.Controls.AddRange([customEnabled[i], customNames[i], customTicks[i], lblSec]);
             y += 30;
         }
 
         y += 4;
         AddSeparator(panel, y); y += 10;
 
-        // ── 알람 파일 선택 ──
-        var lblFile = new Label
+        // 알람 파일
+        panel.Controls.Add(new Label
         {
-            Text = "알람 파일", Left = x, Top = y + 3,
-            Width = 56, Height = 17, ForeColor = Color.LightGray
-        };
-        cmbAlarmFile = new ComboBox
+            Text = "알람 파일",
+            Left = 8, Top = y + 3,
+            Width = 55, ForeColor = Color.LightGray,
+            AutoSize = false
+        });
+
+        _cmbAlarmFile = new ComboBox
         {
-            Left = x + 60, Top = y, Width = 162,
+            Left = 66, Top = y, Width = 158,
             DropDownStyle = ComboBoxStyle.DropDownList,
-            FlatStyle     = FlatStyle.Flat,
-            BackColor     = Color.FromArgb(40, 40, 40),
-            ForeColor     = Color.White
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(40, 40, 40),
+            ForeColor = Color.White
         };
-        cmbAlarmFile.SelectedIndexChanged += (_, _) =>
-        {
-            if (cmbAlarmFile.SelectedItem is string name)
-                _config.AlarmName = name;
-        };
-        panel.Controls.Add(lblFile);
-        panel.Controls.Add(cmbAlarmFile);
+        panel.Controls.Add(_cmbAlarmFile);
         y += 30;
 
-        // ── 볼륨 슬라이더 ──
-        var lblVolTitle = new Label
+        // 볼륨 슬라이더
+        panel.Controls.Add(new Label
         {
-            Text = "볼륨", Left = x, Top = y + 5,
-            Width = 30, Height = 15, ForeColor = Color.LightGray
-        };
-        sliderVolume = new NSlider
+            Text = "볼륨",
+            Left = 8, Top = y + 4,
+            Width = 30, ForeColor = Color.LightGray,
+            AutoSize = true
+        });
+
+        _sliderVolume = new NSlider
         {
-            Left = x + 36, Top = y, Width = 148, Height = 20,
+            Left = 42, Top = y, Width = 148, Height = 20,
             Minimum = 0, Maximum = 100
         };
-        sliderVolume.ValueChanged += (_, _) =>
+        panel.Controls.Add(_sliderVolume);
+
+        _lblVolume = new Label
         {
-            _config.Volume = sliderVolume.Value;
-            Synth.Instance.SetVolume(sliderVolume.Value);
-            lblVolumeValue.Text = sliderVolume.Value.ToString();
-            _config.Save();
+            Left = 196, Top = y + 3,
+            Width = 28, ForeColor = Color.White,
+            Text = "50", AutoSize = false
         };
-        lblVolumeValue = new Label
-        {
-            Text = "50", Left = x + 190, Top = y + 3,
-            Width = 28, Height = 17, ForeColor = Color.White
-        };
-        panel.Controls.Add(lblVolTitle);
-        panel.Controls.Add(sliderVolume);
-        panel.Controls.Add(lblVolumeValue);
+        panel.Controls.Add(_lblVolume);
         y += 28;
 
-        // ── TTS 출력 체크박스 ──
-        cbTts = new CheckBox
+        // TTS 출력 체크박스
+        _cbTts = new CheckBox
         {
-            Text = "TTS 출력", Left = x, Top = y,
-            Width = 90, Height = 22,
-            ForeColor = Color.White, Cursor = Cursors.Hand
+            Text = "TTS 출력",
+            Left = 8, Top = y,
+            Width = 100, ForeColor = Color.White
         };
-        cbTts.CheckedChanged += (_, _) =>
-        {
-            _config.Tts = cbTts.Checked;
-            _config.Save();
-        };
-        panel.Controls.Add(cbTts);
+        panel.Controls.Add(_cbTts);
         y += 26;
 
-        // ── TTS 속도 슬라이더 ──
-        var lblRate = new Label
+        // TTS 속도
+        panel.Controls.Add(new Label
         {
-            Text = "TTS 속도", Left = x, Top = y + 5,
-            Width = 52, Height = 15, ForeColor = Color.LightGray
-        };
-        sliderRate = new NSlider
+            Text = "TTS 속도",
+            Left = 8, Top = y + 4,
+            Width = 55, ForeColor = Color.LightGray,
+            AutoSize = false
+        });
+
+        _sliderRate = new NSlider
         {
-            Left = x + 58, Top = y, Width = 126, Height = 20,
+            Left = 66, Top = y, Width = 120, Height = 20,
             Minimum = -10, Maximum = 10
         };
-        sliderRate.ValueChanged += (_, _) =>
-        {
-            _config.Rate = sliderRate.Value;
-            Synth.Instance.SetRate(sliderRate.Value);
-            _config.Save();
-        };
-        panel.Controls.Add(lblRate);
-        panel.Controls.Add(sliderRate);
-        y += 30;
+        panel.Controls.Add(_sliderRate);
+        y += 28;
 
         AddSeparator(panel, y); y += 10;
 
-        // ── 알람 설정 열기 버튼 ──
-        btnAlarmSettings = new Button
+        // 알람 설정 열기 버튼
+        var btnAlarm = new Button
         {
-            Text      = "알람 설정 열기",
-            Left = x, Top = y, Width = 220, Height = 28,
-            FlatStyle               = FlatStyle.Flat,
-            BackColor               = Color.FromArgb(55, 90, 145),
-            ForeColor               = Color.White,
-            Cursor                  = Cursors.Hand,
+            Text = "알람 설정 열기",
+            Left = 8, Top = y, Width = 218, Height = 28,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(55, 90, 145),
+            ForeColor = Color.White,
+            Cursor = Cursors.Hand,
             UseVisualStyleBackColor = false
         };
-        btnAlarmSettings.FlatAppearance.BorderSize = 0;
-        btnAlarmSettings.Click += (_, _) => OpenAlarmSettings();
-        panel.Controls.Add(btnAlarmSettings);
+        btnAlarm.FlatAppearance.BorderSize = 0;
+        btnAlarm.Click += (s, e) =>
+        {
+            bool was = TopMost;
+            TopMost = false;
+            using var af = new AlarmForm();
+            af.ShowDialog(this);
+            TopMost = was;
+            LoadAlarmFiles();
+            LoadConfigToControls();
+        };
+        panel.Controls.Add(btnAlarm);
 
         return panel;
     }
@@ -407,246 +407,361 @@ public partial class Form1 : Form
         });
     }
 
-    private void SetupTimerContextMenu(Control target)
+    // ─────────────────────────────────────────────────────────────
+    // 이벤트 연결
+    // ─────────────────────────────────────────────────────────────
+    private void ConnectEvents()
     {
-        var menu = new ContextMenuStrip
+        // 타이틀바 드래그
+        _titleBar.MouseDown += TitleBar_MouseDown;
+
+        // 창 버튼
+        _btnClose.Click += (_, _) => Close();
+        _btnMin.Click += (_, _) => WindowState = FormWindowState.Minimized;
+        _btnMax.Click += (_, _) =>
+            WindowState = WindowState == FormWindowState.Maximized
+                ? FormWindowState.Normal
+                : FormWindowState.Maximized;
+        SizeChanged += (_, _) => _btnMax?.Invalidate();
+
+        // 항상 위
+        _cbTopMost.CheckedChanged += (_, _) =>
         {
-            BackColor = Color.FromArgb(40, 40, 40),
-            ForeColor = Color.White
+            TopMost = _cbTopMost.Checked;
+            Config.Instance.TopMost = _cbTopMost.Checked;
+            Config.Instance.Save();
         };
 
-        var itemStart = new ToolStripMenuItem("▶ 시작 / 재시작");
-        var itemStop  = new ToolStripMenuItem("⏹ 정지");
-        var itemAlarm = new ToolStripMenuItem("⏰ 알람 설정 열기");
-
-        itemStart.Click += (_, _) => StartTimer();
-        itemStop.Click  += (_, _) => StopTimer();
-        itemAlarm.Click += (_, _) => OpenAlarmSettings();
-
-        menu.Items.AddRange([itemStart, itemStop, new ToolStripSeparator(), itemAlarm]);
-        target.ContextMenuStrip = menu;
-    }
-
-    // ─────────────────────────────────────────────
-    //  Config 로드 / 저장
-    // ─────────────────────────────────────────────
-    private void LoadConfigToControls()
-    {
-        if (_config.IsMaximize)
+        // 테두리 숨기기
+        _cbHideBorder.CheckedChanged += (_, _) =>
         {
-            WindowState = FormWindowState.Maximized;
-        }
-        else
+            Config.Instance.IsHideWindowBorderOnFocusOut = _cbHideBorder.Checked;
+            Config.Instance.Save();
+        };
+
+        // 사이트 선택
+        _cmbSite.SelectedIndexChanged += CmbSite_SelectedIndexChanged;
+
+        // 볼륨
+        _sliderVolume.ValueChanged += (_, _) =>
         {
-            Width  = Math.Max(_config.Width  > 0 ? _config.Width  : 1100, MinimumSize.Width);
-            Height = Math.Max(_config.Height > 0 ? _config.Height : 700,  MinimumSize.Height);
+            Config.Instance.Volume = _sliderVolume.Value;
+            Synth.Instance.SetVolume(_sliderVolume.Value);
+            _lblVolume.Text = _sliderVolume.Value.ToString();
+            Config.Instance.Save();
+        };
 
-            if (IsOnScreen(_config.X, _config.Y))
-                Location = new Point(_config.X, _config.Y);
-        }
+        // TTS 속도
+        _sliderRate.ValueChanged += (_, _) =>
+        {
+            Config.Instance.Rate = _sliderRate.Value;
+            Synth.Instance.SetRate(_sliderRate.Value);
+            Config.Instance.Save();
+        };
 
-        Opacity = Math.Clamp(_config.Opacity > 0 ? _config.Opacity : 1.0, 0.2, 1.0);
-        TopMost = _config.TopMost;
+        // TTS 체크박스
+        _cbTts.CheckedChanged += (_, _) =>
+        {
+            Config.Instance.Tts = _cbTts.Checked;
+            Config.Instance.Save();
+        };
 
-        cbTopMost.Checked    = _config.TopMost;
-        cbHideBorder.Checked = _config.IsHideWindowBorderOnFocusOut;
+        // 알람 파일 선택
+        _cmbAlarmFile.SelectedIndexChanged += (_, _) =>
+        {
+            if (_cmbAlarmFile.SelectedItem is string name &&
+                name != "(mp3 파일 없음)")
+            {
+                Config.Instance.AlarmName = name;
+                Config.Instance.Save();
+            }
+        };
 
+        // 고정 알람 체크박스 8개
         for (int i = 0; i < 8; i++)
-            alarmChecks[i].Checked = _config.AlarmEnabled[i];
+        {
+            int idx = i;
+            _alarmChecks[i].CheckedChanged += (_, _) =>
+            {
+                Config.Instance.AlarmEnabled[idx] = _alarmChecks[idx].Checked;
+                if (_alarmChecks[idx].Checked)
+                    _remaining[idx] = AlarmSeconds[idx];
+                Config.Instance.Save();
+            };
+        }
 
+        // 커스텀 알람
         for (int i = 0; i < 3; i++)
         {
-            customNames[i].Text      = _config.CustomAlarms[i].Name;
-            customTicks[i].Value     = (decimal)Math.Max(0, _config.CustomAlarms[i].Tick);
-            customEnabled[i].Checked = _config.CustomAlarms[i].Enabled;
+            int idx = i;
+            _customNames[i].TextChanged += (_, _) =>
+                Config.Instance.CustomAlarms[idx].Name = _customNames[idx].Text;
+            _customTicks[i].ValueChanged += (_, _) =>
+            {
+                Config.Instance.CustomAlarms[idx].Tick = (int)_customTicks[idx].Value;
+                if (Config.Instance.CustomAlarms[idx].Enabled)
+                    _customRemaining[idx] = (int)_customTicks[idx].Value;
+            };
+            _customEnabled[i].CheckedChanged += (_, _) =>
+            {
+                Config.Instance.CustomAlarms[idx].Enabled = _customEnabled[idx].Checked;
+                if (_customEnabled[idx].Checked)
+                    _customRemaining[idx] = Config.Instance.CustomAlarms[idx].Tick;
+            };
         }
 
-        sliderVolume.Value  = Math.Clamp(_config.Volume, 0, 100);
-        lblVolumeValue.Text = _config.Volume.ToString();
-        sliderRate.Value    = Math.Clamp(_config.Rate, -10, 10);
-        cbTts.Checked       = _config.Tts;
-
-        Synth.Instance.SetVolume(_config.Volume);
-        Synth.Instance.SetRate(_config.Rate);
+        // 타이머
+        _timer.Tick += Timer_Tick;
     }
 
-    private static bool IsOnScreen(int x, int y)
+    // ─────────────────────────────────────────────────────────────
+    // Config 로드/저장
+    // ─────────────────────────────────────────────────────────────
+    private void LoadConfigToControls()
     {
-        foreach (var scr in Screen.AllScreens)
-            if (scr.WorkingArea.Contains(x, y)) return true;
-        return false;
+        var cfg = Config.Instance;
+
+        // 투명도
+        Opacity = Math.Clamp(cfg.Opacity, 0.2, 1.0);
+        TopMost = cfg.TopMost;
+
+        // null 체크 후 설정 (InitControls 이전 호출 방지)
+        if (_cbTopMost != null) _cbTopMost.Checked = cfg.TopMost;
+        if (_cbHideBorder != null) _cbHideBorder.Checked = cfg.IsHideWindowBorderOnFocusOut;
+
+        // 알람 체크박스
+        for (int i = 0; i < 8; i++)
+            if (_alarmChecks[i] != null)
+                _alarmChecks[i].Checked = cfg.AlarmEnabled[i];
+
+        // remaining 초기화
+        for (int i = 0; i < 8; i++) _remaining[i] = AlarmSeconds[i];
+        for (int i = 0; i < 3; i++)
+            _customRemaining[i] = cfg.CustomAlarms[i].Tick;
+
+        // 커스텀 알람
+        for (int i = 0; i < 3; i++)
+        {
+            if (_customNames[i] != null)
+                _customNames[i].Text = cfg.CustomAlarms[i].Name;
+            if (_customTicks[i] != null)
+                _customTicks[i].Value = Math.Max(0, cfg.CustomAlarms[i].Tick);
+            if (_customEnabled[i] != null)
+                _customEnabled[i].Checked = cfg.CustomAlarms[i].Enabled;
+        }
+
+        // 슬라이더
+        if (_sliderVolume != null)
+        {
+            _sliderVolume.Value = Math.Clamp(cfg.Volume, _sliderVolume.Minimum, _sliderVolume.Maximum);
+            if (_lblVolume != null) _lblVolume.Text = _sliderVolume.Value.ToString();
+        }
+        if (_sliderRate != null)
+            _sliderRate.Value = Math.Clamp(cfg.Rate, _sliderRate.Minimum, _sliderRate.Maximum);
+        if (_cbTts != null) _cbTts.Checked = cfg.Tts;
+
+        Synth.Instance.SetVolume(cfg.Volume);
+        Synth.Instance.SetRate(cfg.Rate);
     }
 
-    // ─────────────────────────────────────────────
-    //  사이트 목록
-    // ─────────────────────────────────────────────
+    private void SaveConfig()
+    {
+        var cfg = Config.Instance;
+
+        if (WindowState == FormWindowState.Normal)
+        {
+            cfg.Width = Width;
+            cfg.Height = Height;
+            cfg.X = Left;
+            cfg.Y = Top;
+        }
+        cfg.IsMaximize = WindowState == FormWindowState.Maximized;
+        cfg.TopMost = TopMost;
+        cfg.Opacity = Opacity;
+
+        for (int i = 0; i < 8; i++)
+            cfg.AlarmEnabled[i] = _alarmChecks[i]?.Checked ?? false;
+        for (int i = 0; i < 3; i++)
+        {
+            cfg.CustomAlarms[i].Name = _customNames[i]?.Text ?? "";
+            cfg.CustomAlarms[i].Tick = (int)(_customTicks[i]?.Value ?? 0);
+            cfg.CustomAlarms[i].Enabled = _customEnabled[i]?.Checked ?? false;
+        }
+
+        cfg.AlarmName = _cmbAlarmFile?.SelectedItem?.ToString() ?? cfg.AlarmName;
+        cfg.Tts = _cbTts?.Checked ?? false;
+        cfg.Volume = _sliderVolume?.Value ?? cfg.Volume;
+        cfg.Rate = _sliderRate?.Value ?? cfg.Rate;
+
+        try
+        {
+            if (_webView?.CoreWebView2 != null)
+                cfg.LatestUrl = _webView.CoreWebView2.Source;
+        }
+        catch { }
+
+        cfg.Save();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 사이트 드롭다운
+    // ─────────────────────────────────────────────────────────────
     private void LoadSites()
     {
-        cmbSite.SelectedIndexChanged -= CmbSite_SelectedIndexChanged;
-        cmbSite.Items.Clear();
+        _cmbSite.SelectedIndexChanged -= CmbSite_SelectedIndexChanged;
+        _cmbSite.Items.Clear();
+        foreach (var site in Config.Instance.Sites)
+            _cmbSite.Items.Add(site.Name);
+        _cmbSite.Items.Add("＋ 사이트 추가");
 
-        foreach (var site in _config.Sites)
-            cmbSite.Items.Add(site.Name);
+        var cfg = Config.Instance;
+        if (!string.IsNullOrEmpty(cfg.DefaultSite) &&
+            _cmbSite.Items.Contains(cfg.DefaultSite))
+            _cmbSite.SelectedItem = cfg.DefaultSite;
+        else if (cfg.Sites.Count > 0)
+            _cmbSite.SelectedIndex = 0;
 
-        cmbSite.Items.Add("＋ 사이트 추가");
-        cmbSite.Items.Add("━ 사이트 관리");
-
-        if (!string.IsNullOrEmpty(_config.DefaultSite) &&
-            cmbSite.Items.Contains(_config.DefaultSite))
-            cmbSite.SelectedItem = _config.DefaultSite;
-        else if (_config.Sites.Count > 0)
-            cmbSite.SelectedIndex = 0;
-
-        cmbSite.SelectedIndexChanged += CmbSite_SelectedIndexChanged;
+        _cmbSite.SelectedIndexChanged += CmbSite_SelectedIndexChanged;
     }
 
     private void CmbSite_SelectedIndexChanged(object? sender, EventArgs e)
     {
-        var selected = cmbSite.SelectedItem?.ToString();
-        if (selected is null) return;
+        var selected = _cmbSite.SelectedItem?.ToString();
+        if (string.IsNullOrEmpty(selected)) return;
 
         if (selected == "＋ 사이트 추가")
         {
             bool was = TopMost;
-            TopMost = false;                    // ⚠️ TopMost=true 이면 자식창이 안 보임 → 임시 해제
-            using var form = new SiteForm();
-            bool ok = form.ShowDialog(this) == DialogResult.OK && form.Result is not null;
-            TopMost = was;
-
-            if (ok)
+            TopMost = false;
+            using var sf = new SiteForm();
+            if (sf.ShowDialog(this) == DialogResult.OK && sf.Result is { } site)
             {
-                _config.Sites.Add(form.Result!);
-                _config.Save();
+                Config.Instance.Sites.Add(site);
+                Config.Instance.Save();
+                LoadSites();
+                _cmbSite.SelectedItem = site.Name;
             }
-            LoadSites();
+            else
+            {
+                LoadSites();
+            }
+            TopMost = was;
             return;
         }
 
-        if (selected == "━ 사이트 관리")
+        var found = Config.Instance.Sites.FirstOrDefault(s => s.Name == selected);
+        if (found != null)
         {
-            // TODO: 사이트 관리 팝업 (추후 구현)
-            LoadSites();
-            return;
-        }
-
-        var site = _config.Sites.FirstOrDefault(s => s.Name == selected);
-        if (site is not null)
-        {
-            _config.DefaultSite = site.Name;
-            _config.Save();
-
-            if (webView?.CoreWebView2 is not null)
-                webView.CoreWebView2.Navigate(site.Url);
+            Config.Instance.DefaultSite = found.Name;
+            if (_webView?.CoreWebView2 != null)
+                _webView.CoreWebView2.Navigate(found.Url);
         }
     }
 
-    // ─────────────────────────────────────────────
-    //  알람 파일 목록 (alarm/ 폴더 mp3)
-    // ─────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────
+    // 알람 파일 로드
+    // ─────────────────────────────────────────────────────────────
     private void LoadAlarmFiles()
     {
-        cmbAlarmFile.Items.Clear();
+        _cmbAlarmFile.Items.Clear();
         string dir = Path.Combine(AppContext.BaseDirectory, "alarm");
-
         if (Directory.Exists(dir))
             foreach (var f in Directory.GetFiles(dir, "*.mp3"))
-                cmbAlarmFile.Items.Add(Path.GetFileName(f));
+                _cmbAlarmFile.Items.Add(Path.GetFileName(f));
 
-        if (cmbAlarmFile.Items.Count == 0)
-            cmbAlarmFile.Items.Add("(mp3 파일 없음)");
+        if (_cmbAlarmFile.Items.Count == 0)
+            _cmbAlarmFile.Items.Add("(mp3 파일 없음)");
 
-        if (!string.IsNullOrEmpty(_config.AlarmName) &&
-            cmbAlarmFile.Items.Contains(_config.AlarmName))
-            cmbAlarmFile.SelectedItem = _config.AlarmName;
-        else if (cmbAlarmFile.Items.Count > 0)
-            cmbAlarmFile.SelectedIndex = 0;
+        string saved = Config.Instance.AlarmName;
+        if (!string.IsNullOrEmpty(saved) && _cmbAlarmFile.Items.Contains(saved))
+            _cmbAlarmFile.SelectedItem = saved;
+        else if (_cmbAlarmFile.Items.Count > 0)
+            _cmbAlarmFile.SelectedIndex = 0;
     }
 
-    // ─────────────────────────────────────────────
-    //  WebView2 초기화
-    // ─────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────
+    // WebView2 초기화
+    // ─────────────────────────────────────────────────────────────
     private async Task InitWV()
     {
         try
         {
             string cacheDir = Path.Combine(AppContext.BaseDirectory, "cache");
-            var env = await CoreWebView2Environment.CreateAsync(userDataFolder: cacheDir);
-            await webView.EnsureCoreWebView2Async(env);
+            var env = await CoreWebView2Environment.CreateAsync(
+                userDataFolder: cacheDir);
+            await _webView.EnsureCoreWebView2Async(env);
 
-            webView.CoreWebView2.NavigationCompleted += (_, _) => InjectJS();
-            webView.CoreWebView2.Navigate(ResolveStartUrl());
+            _webView.CoreWebView2.NavigationCompleted += (_, _) => InjectJS();
+
+            string url = Config.Instance.LatestUrl;
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                var def = Config.Instance.Sites.FirstOrDefault(
+                    s => s.Name == Config.Instance.DefaultSite)
+                    ?? Config.Instance.Sites.FirstOrDefault();
+                url = def?.Url ?? "https://www.naver.com";
+            }
+            _webView.CoreWebView2.Navigate(url);
         }
         catch (Exception ex)
         {
             MessageBox.Show(
-                $"WebView2 초기화 실패: {ex.Message}\n\nWebView2 런타임이 설치되어 있는지 확인해주세요.",
-                "JHP — 런타임 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                $"WebView2 초기화 실패: {ex.Message}\n" +
+                "WebView2 런타임이 설치되어 있는지 확인해주세요.\n" +
+                "https://developer.microsoft.com/ko-kr/microsoft-edge/webview2/",
+                "오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
-    }
-
-    private string ResolveStartUrl()
-    {
-        if (!string.IsNullOrWhiteSpace(_config.LatestUrl)) return _config.LatestUrl;
-        var def = _config.Sites.FirstOrDefault(s => s.Name == _config.DefaultSite);
-        if (def is not null) return def.Url;
-        return _config.Sites.Count > 0 ? _config.Sites[0].Url : "https://www.naver.com";
     }
 
     private async void InjectJS()
     {
-        if (webView?.CoreWebView2 is null) return;
-        string? source = webView.CoreWebView2.Source;
+        if (_webView?.CoreWebView2 is null) return;
+
+        string? source = _webView.CoreWebView2.Source;
         if (string.IsNullOrWhiteSpace(source)) return;
+
         string host;
-        try   { host = new Uri(source).Host; }
+        try { host = new Uri(source).Host; }
         catch { return; }
 
         try
         {
             if (host.Contains("laftel.net"))
-                await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.LaftelSkipNext);
+                await _webView.CoreWebView2.ExecuteScriptAsync(UserScripts.LaftelSkipNext);
             else if (host.Contains("netflix.com"))
-                await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.NetflixSkipNext);
+                await _webView.CoreWebView2.ExecuteScriptAsync(UserScripts.NetflixSkipNext);
         }
         catch { }
     }
 
-    // ─────────────────────────────────────────────
-    //  업데이트 확인
-    // ─────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────
+    // 업데이트 확인
+    // ─────────────────────────────────────────────────────────────
     private async Task CheckUpdateAsync()
     {
-        var (hasUpdate, latest, url) = await UpdateChecker.Check(CurrentVersion);
-        if (!hasUpdate) return;
+        try
+        {
+            var (hasUpdate, latest, url) = await UpdateChecker.Check(CurrentVersion);
+            if (!hasUpdate) return;
 
-        if (Prompt.ShowDialog("업데이트 알림",
-                $"새 버전 {latest}이 있습니다. 다운로드 페이지를 여시겠습니까?"))
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            if (MessageBox.Show(
+                $"새 버전 {latest}이 있습니다.\n다운로드 페이지로 이동할까요?",
+                "JHP 업데이트", MessageBoxButtons.YesNo) == DialogResult.Yes)
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch { }
     }
 
-    // ─────────────────────────────────────────────
-    //  타이머
-    // ─────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────
+    // 타이머
+    // ─────────────────────────────────────────────────────────────
     private void StartTimer()
     {
         for (int i = 0; i < 8; i++) _remaining[i] = AlarmSeconds[i];
-        for (int i = 0; i < 3; i++) _customRemaining[i] = _config.CustomAlarms[i].Tick;
+        for (int i = 0; i < 3; i++)
+            _customRemaining[i] = Config.Instance.CustomAlarms[i].Tick;
         _timerRunning = true;
-        UpdateNextAlarmLabel();
-    }
-
-    private void StopTimer()
-    {
-        _timerRunning = false;
-        UpdateNextAlarmLabel();
-    }
-
-    private void ResetTimerState()
-    {
-        for (int i = 0; i < 8; i++) _remaining[i] = AlarmSeconds[i];
-        for (int i = 0; i < 3; i++) _customRemaining[i] = _config.CustomAlarms[i].Tick;
-        _timerRunning = false;
-        UpdateNextAlarmLabel();
+        _timer.Start();
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
@@ -655,79 +770,59 @@ public partial class Form1 : Form
 
         for (int i = 0; i < 8; i++)
         {
-            if (!_config.AlarmEnabled[i]) continue;
+            if (!Config.Instance.AlarmEnabled[i]) continue;
             if (--_remaining[i] > 0) continue;
+
             _remaining[i] = AlarmSeconds[i];
             FireAlarm(AlarmLabels[i]);
         }
 
         for (int i = 0; i < 3; i++)
         {
-            var alarm = _config.CustomAlarms[i];
-            if (!alarm.Enabled || alarm.Tick <= 0) continue;
+            var ca = Config.Instance.CustomAlarms[i];
+            if (!ca.Enabled || ca.Tick <= 0) continue;
             if (--_customRemaining[i] > 0) continue;
-            _customRemaining[i] = alarm.Tick;
-            FireAlarm(string.IsNullOrWhiteSpace(alarm.Name) ? "커스텀 알람" : alarm.Name);
-        }
 
-        UpdateNextAlarmLabel();
+            _customRemaining[i] = ca.Tick;
+            FireAlarm(string.IsNullOrWhiteSpace(ca.Name) ? "커스텀 알람" : ca.Name);
+        }
     }
 
-    private void FireAlarm(string name)
+    private void FireAlarm(string label)
     {
-        if (_config.Tts)
-            Synth.Instance.TTS(name, _config.Volume, _config.Rate);
+        if (Config.Instance.Tts)
+            Synth.Instance.TTS(label, Config.Instance.Volume, Config.Instance.Rate);
         else
-            Synth.Instance.Ring(_config.AlarmName, _config.Volume);
+            Synth.Instance.Ring(Config.Instance.AlarmName, Config.Instance.Volume);
     }
 
-    private void UpdateNextAlarmLabel()
+    // ─────────────────────────────────────────────────────────────
+    // 포커스 이벤트 (테두리 숨기기)
+    // ─────────────────────────────────────────────────────────────
+    private void Form1_Activated(object? sender, EventArgs e)
     {
-        if (!_timerRunning)
-        {
-            lblNextAlarm.Text = "⏱ 클릭하여 시작";
-            return;
-        }
-
-        int? min = null;
-        for (int i = 0; i < 8; i++)
-            if (_config.AlarmEnabled[i])
-                min = min is null ? _remaining[i] : Math.Min(min.Value, _remaining[i]);
-
-        for (int i = 0; i < 3; i++)
-            if (_config.CustomAlarms[i].Enabled && _config.CustomAlarms[i].Tick > 0)
-                min = min is null ? _customRemaining[i] : Math.Min(min.Value, _customRemaining[i]);
-
-        lblNextAlarm.Text = min is null
-            ? "⏱ (알람 없음)"
-            : $"⏱ {TimeSpan.FromSeconds(min.Value):hh\\:mm\\:ss}";
+        if (_titleBar != null) _titleBar.Visible = true;
     }
 
-    private void OpenAlarmSettings()
+    private void Form1_Deactivate(object? sender, EventArgs e)
     {
-        bool was = TopMost;
-        TopMost = false;                        // ⚠️ TopMost 버그 방지
-        using var form = new AlarmForm();
-        bool ok = form.ShowDialog(this) == DialogResult.OK;
-        TopMost = was;
-        if (!ok) return;
-
-        for (int i = 0; i < 8; i++)
-            if (_config.AlarmEnabled[i]) _remaining[i] = AlarmSeconds[i];
-        for (int i = 0; i < 3; i++)
-            if (_config.CustomAlarms[i].Enabled) _customRemaining[i] = _config.CustomAlarms[i].Tick;
-
-        sliderVolume.Value  = Math.Clamp(_config.Volume, 0, 100);
-        lblVolumeValue.Text = _config.Volume.ToString();
-        sliderRate.Value    = Math.Clamp(_config.Rate, -10, 10);
-        cbTts.Checked       = _config.Tts;
-        LoadAlarmFiles();
-        UpdateNextAlarmLabel();
+        if (Config.Instance.IsHideWindowBorderOnFocusOut && _titleBar != null)
+            _titleBar.Visible = false;
     }
 
-    // ─────────────────────────────────────────────
-    //  타이틀바 드래그
-    // ─────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────
+    // 종료
+    // ─────────────────────────────────────────────────────────────
+    private void Form1_FormClosing(object? sender, FormClosingEventArgs e)
+    {
+        _timer?.Stop();
+        Synth.Instance.Stop();
+        SaveConfig();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 타이틀바 드래그
+    // ─────────────────────────────────────────────────────────────
     private void TitleBar_MouseDown(object? sender, MouseEventArgs e)
     {
         if (e.Button != MouseButtons.Left) return;
@@ -735,77 +830,33 @@ public partial class Form1 : Form
         SendMessage(Handle, WM_NCLBUTTONDOWN, HTCAPTION, IntPtr.Zero);
     }
 
-    // ─────────────────────────────────────────────
-    //  포커스 아웃 시 타이틀바 숨김
-    // ─────────────────────────────────────────────
-    private void Form1_Activated(object? sender, EventArgs e)
-    {
-        if (_config.IsHideWindowBorderOnFocusOut)
-            pnlTitleBar.Visible = true;
-    }
-
-    private void Form1_Deactivate(object? sender, EventArgs e)
-    {
-        if (_config.IsHideWindowBorderOnFocusOut)
-            pnlTitleBar.Visible = false;
-    }
-
-    // ─────────────────────────────────────────────
-    //  종료 시 설정 저장
-    // ─────────────────────────────────────────────
-    private void Form1_FormClosing(object? sender, FormClosingEventArgs e)
-    {
-        timer?.Stop();
-        Synth.Instance.Stop();
-
-        if (WindowState == FormWindowState.Normal)
-        {
-            _config.X      = Location.X;
-            _config.Y      = Location.Y;
-            _config.Width  = Size.Width;
-            _config.Height = Size.Height;
-        }
-
-        _config.IsMaximize = WindowState == FormWindowState.Maximized;
-        _config.TopMost    = TopMost;
-        _config.Opacity    = Opacity;
-
-        if (webView?.CoreWebView2 is not null)
-            _config.LatestUrl = webView.CoreWebView2.Source;
-
-        _config.Save();
-    }
-
-    // ─────────────────────────────────────────────
-    //  WndProc — FormBorderStyle.None 창 크기 조절
-    // ─────────────────────────────────────────────
-    private const int WM_NCHITTEST     = 0x0084;
-    private const int HTCLIENT         = 1;
-    private const int HTCAPTION        = 2;
-    private const int HTLEFT           = 10;
-    private const int HTRIGHT          = 11;
-    private const int HTTOP            = 12;
-    private const int HTTOPLEFT        = 13;
-    private const int HTTOPRIGHT       = 14;
-    private const int HTBOTTOM         = 15;
-    private const int HTBOTTOMLEFT     = 16;
-    private const int HTBOTTOMRIGHT    = 17;
+    // ─────────────────────────────────────────────────────────────
+    // 창 리사이즈 (FormBorderStyle.None)
+    // ─────────────────────────────────────────────────────────────
+    private const int WM_NCHITTEST = 0x0084;
     private const int WM_NCLBUTTONDOWN = 0xA1;
+    private const int HTCLIENT = 1;
+    private const int HTCAPTION = 2;
+    private const int HTLEFT = 10, HTRIGHT = 11, HTTOP = 12;
+    private const int HTTOPLEFT = 13, HTTOPRIGHT = 14;
+    private const int HTBOTTOM = 15, HTBOTTOMLEFT = 16, HTBOTTOMRIGHT = 17;
 
-    [DllImport("user32.dll")] private static extern bool   ReleaseCapture();
-    [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, IntPtr lParam);
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, IntPtr lParam);
 
     protected override void WndProc(ref Message m)
     {
         base.WndProc(ref m);
 
-        if (m.Msg != WM_NCHITTEST ||
-            WindowState != FormWindowState.Normal ||
-            (int)m.Result != HTCLIENT)
+        if (m.Msg != WM_NCHITTEST || WindowState != FormWindowState.Normal
+            || (int)m.Result != HTCLIENT)
             return;
 
-        int x   = unchecked((short)(m.LParam.ToInt32() & 0xFFFF));
-        int y   = unchecked((short)((m.LParam.ToInt32() >> 16) & 0xFFFF));
+        int lp = m.LParam.ToInt32();
+        int x = unchecked((short)(lp & 0xFFFF));
+        int y = unchecked((short)((lp >> 16) & 0xFFFF));
         var pos = ReSize.GetMousePosition(this, PointToClient(new Point(x, y)));
 
         m.Result = (IntPtr)(pos switch
@@ -822,7 +873,6 @@ public partial class Form1 : Form
         });
     }
 
-    // 창 가장자리에서 리사이즈 커서 시각적 피드백
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
