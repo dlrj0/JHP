@@ -1,4 +1,4 @@
-﻿using JHP.Api;
+using JHP.Api;
 
 namespace JHP;
 
@@ -27,10 +27,23 @@ public class SiteForm : Form
         ForeColor = Color.White;
 
         var lblName = new Label { Text = "이름", Left = 12, Top = 16, Width = 60, ForeColor = Color.LightGray };
-        _tbName = new TextBox { Left = 78, Top = 13, Width = 252 };
+        _tbName = new TextBox
+        {
+            Left = 78, Top = 13, Width = 252,
+            BackColor = Color.FromArgb(50, 50, 50),
+            ForeColor = Color.White,
+            BorderStyle = BorderStyle.FixedSingle
+        };
 
         var lblUrl = new Label { Text = "URL", Left = 12, Top = 48, Width = 60, ForeColor = Color.LightGray };
-        _tbUrl = new TextBox { Left = 78, Top = 45, Width = 252, PlaceholderText = "https://" };
+        _tbUrl = new TextBox
+        {
+            Left = 78, Top = 45, Width = 252,
+            PlaceholderText = "https://",
+            BackColor = Color.FromArgb(50, 50, 50),
+            ForeColor = Color.White,
+            BorderStyle = BorderStyle.FixedSingle
+        };
 
         var btnOk = new Button
         {
