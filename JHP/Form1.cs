@@ -2,7 +2,6 @@ using JHP.Api;
 using JHP.Asset;
 using JHP.Controls;
 using Microsoft.Web.WebView2.Core;
-using Microsoft.Web.WebView2.WinForms;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -19,7 +18,12 @@ public partial class Form1 : Form
     private readonly Config _config = Config.Instance;
     private readonly int[] _remaining = new int[8];
     private readonly int[] _customRemaining = new int[3];
+
+    // 재획비 타이머 동작 상태 — 좌클릭으로 시작, 다시 누르면 정지(=초기화)
     private bool _timerRunning = false;
+
+    // 볼륨/투명도 숫자 직접입력 중 어떤 슬라이더를 편집하고 있는지
+    private NSlider? _editingSlider;
 
     public Form1()
     {
@@ -40,7 +44,6 @@ public partial class Form1 : Form
         if (IsOnScreen(_config.X, _config.Y))
             Location = new Point(_config.X, _config.Y);
 
-        // 타이머는 Tick 이벤트 연결용으로만 시작 (_timerRunning=false면 아무 동작 없음)
         timer.Start();
 
         await InitWV();
@@ -59,19 +62,18 @@ public partial class Form1 : Form
 
     private void InitControls()
     {
-        // 타이틀바 드래그 (lblNextAlarm은 드래그 제외 — 클릭 이벤트가 있음)
+        // 타이틀바 드래그 이동
         pnlTitleBar.MouseDown += TitleBar_MouseDown;
         lblTitle.MouseDown += TitleBar_MouseDown;
-
-        // ⏱ 라벨: 좌클릭 = 타이머 시작/재시작, 우클릭 = 설정 메뉴
-        lblNextAlarm.MouseDown += LblNextAlarm_MouseDown;
-        SetupTimerContextMenu();
 
         btnMinimize.Click += (_, _) => WindowState = FormWindowState.Minimized;
         btnMaximize.Click += (_, _) =>
             WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
         btnClose.Click += (_, _) => Close();
-        btnAlarmSettings.Click += (_, _) => OpenAlarmSettings();
+
+        // 재획비 타이머: 좌클릭 시작/정지 토글, 우클릭은 바로 알람 설정 팝업
+        timerButton.Click += (_, _) => ToggleTimer();
+        timerButton.RightClick += (_, _) => OpenAlarmSettings();
 
         // 볼륨
         sliderVolume.Value = Math.Clamp(_config.Volume, sliderVolume.Minimum, sliderVolume.Maximum);
@@ -96,6 +98,12 @@ public partial class Form1 : Form
             _config.Save();
         };
 
+        // 볼륨/투명도 숫자 클릭 시 직접입력
+        lblVolumeValue.Click += (_, _) => BeginInlineEdit(lblVolumeValue, sliderVolume);
+        lblOpacityValue.Click += (_, _) => BeginInlineEdit(lblOpacityValue, sliderOpacity);
+        tbInlineEdit.KeyDown += InlineEdit_KeyDown;
+        tbInlineEdit.Leave += (_, _) => CommitInlineEdit();
+
         // 메뉴 (사이트 추가 / 항상 위 / 테두리 숨김)
         menuTopmost.Checked = _config.TopMost;
         menuHideBorder.Checked = _config.IsHideWindowBorderOnFocusOut;
@@ -108,64 +116,12 @@ public partial class Form1 : Form
         btnAddSite.Click += (_, _) => AddSite();
         btnRemoveSite.Click += (_, _) => RemoveSelectedSite();
 
-        // 알람 타이머 초기화 (정지 상태)
-        ResetTimerState();
+        // 알람 카운트다운 초기값 준비 (실행 즉시 시작하지 않음 — timerButton 좌클릭으로 시작)
+        for (int i = 0; i < 8; i++) _remaining[i] = AlarmSeconds[i];
+        for (int i = 0; i < 3; i++) _customRemaining[i] = _config.CustomAlarms[i].Tick;
+        UpdateNextAlarmLabel();
+
         timer.Tick += Timer_Tick;
-    }
-
-    // ===== 타이머 컨텍스트 메뉴 =====
-    private ContextMenuStrip? _timerMenu;
-
-    private void SetupTimerContextMenu()
-    {
-        _timerMenu = new ContextMenuStrip();
-        _timerMenu.BackColor = Color.FromArgb(40, 40, 40);
-        _timerMenu.ForeColor = Color.White;
-
-        var itemStart = new ToolStripMenuItem("▶ 시작 / 재시작");
-        itemStart.Click += (_, _) => StartTimer();
-
-        var itemStop = new ToolStripMenuItem("⏹ 정지");
-        itemStop.Click += (_, _) => StopTimer();
-
-        var itemSettings = new ToolStripMenuItem("⏰ 알람 설정 열기");
-        itemSettings.Click += (_, _) => OpenAlarmSettings();
-
-        _timerMenu.Items.Add(itemStart);
-        _timerMenu.Items.Add(itemStop);
-        _timerMenu.Items.Add(new ToolStripSeparator());
-        _timerMenu.Items.Add(itemSettings);
-    }
-
-    private void LblNextAlarm_MouseDown(object? sender, MouseEventArgs e)
-    {
-        if (e.Button == MouseButtons.Left)
-            StartTimer();
-        else if (e.Button == MouseButtons.Right)
-            _timerMenu?.Show(lblNextAlarm, e.Location);
-    }
-
-    // ===== 타이머 제어 =====
-    private void StartTimer()
-    {
-        for (int i = 0; i < 8; i++) _remaining[i] = AlarmSeconds[i];
-        for (int i = 0; i < 3; i++) _customRemaining[i] = _config.CustomAlarms[i].Tick;
-        _timerRunning = true;
-        UpdateNextAlarmLabel();
-    }
-
-    private void StopTimer()
-    {
-        _timerRunning = false;
-        UpdateNextAlarmLabel();
-    }
-
-    private void ResetTimerState()
-    {
-        for (int i = 0; i < 8; i++) _remaining[i] = AlarmSeconds[i];
-        for (int i = 0; i < 3; i++) _customRemaining[i] = _config.CustomAlarms[i].Tick;
-        _timerRunning = false;
-        UpdateNextAlarmLabel();
     }
 
     // ===== WebView2 =====
@@ -173,6 +129,7 @@ public partial class Form1 : Form
     {
         try
         {
+            // CoreWebView2 초기화 전에 호출하면 예외 발생
             string cacheDir = Path.Combine(AppContext.BaseDirectory, "cache");
             var env = await CoreWebView2Environment.CreateAsync(userDataFolder: cacheDir);
             await webView.EnsureCoreWebView2Async(env);
@@ -201,13 +158,7 @@ public partial class Form1 : Form
     {
         if (webView.CoreWebView2 is null) return;
 
-        string? source = webView.CoreWebView2.Source;
-        if (string.IsNullOrWhiteSpace(source)) return;
-
-        string host;
-        try { host = new Uri(source).Host; }
-        catch { return; }
-
+        string host = new Uri(webView.CoreWebView2.Source).Host;
         try
         {
             if (host.Contains("laftel.net"))
@@ -218,7 +169,7 @@ public partial class Form1 : Form
         catch { }
     }
 
-    // ===== 업데이트 확인 =====
+    // ===== 업데이트 확인 (GitHub Releases) =====
     private async void CheckUpdateAsync()
     {
         var (hasUpdate, latest, url) = await UpdateChecker.Check(CurrentVersion);
@@ -228,7 +179,24 @@ public partial class Form1 : Form
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
     }
 
-    // ===== 알람 타이머 =====
+    // ===== 재획비 타이머 시작/정지 토글 =====
+    private void ToggleTimer()
+    {
+        _timerRunning = !_timerRunning;
+        timerButton.Active = _timerRunning;
+
+        if (_timerRunning)
+        {
+            // 시작(=재시작) — 모든 카운트다운을 처음 값으로 리셋
+            for (int i = 0; i < 8; i++) _remaining[i] = AlarmSeconds[i];
+            for (int i = 0; i < 3; i++) _customRemaining[i] = _config.CustomAlarms[i].Tick;
+        }
+        // 정지는 _timerRunning = false 만으로 충분 — 다음 시작 시 항상 처음 값으로 리셋되므로 "정지 = 초기화"가 됨
+
+        UpdateNextAlarmLabel();
+    }
+
+    // ===== 알람 카운트다운 =====
     private void Timer_Tick(object? sender, EventArgs e)
     {
         if (!_timerRunning) return;
@@ -263,11 +231,12 @@ public partial class Form1 : Form
             Synth.Instance.Ring(_config.AlarmName, _config.Volume);
     }
 
+    // 타이머 버튼에는 텍스트 라벨이 없으므로 다음 알람까지 남은 시간은 툴팁으로 안내한다
     private void UpdateNextAlarmLabel()
     {
         if (!_timerRunning)
         {
-            lblNextAlarm.Text = "⏱ 클릭하여 시작";
+            toolTip.SetToolTip(timerButton, "클릭하여 타이머 시작 (우클릭: 알람 설정)");
             return;
         }
 
@@ -281,22 +250,15 @@ public partial class Form1 : Form
             if (_config.CustomAlarms[i].Enabled && _config.CustomAlarms[i].Tick > 0)
                 min = min is null ? _customRemaining[i] : Math.Min(min.Value, _customRemaining[i]);
 
-        lblNextAlarm.Text = min is null
-            ? "⏱ (알람 비활성)"
-            : $"⏱ 다음: {TimeSpan.FromSeconds(min.Value):hh\\:mm\\:ss}";
+        toolTip.SetToolTip(timerButton, min is null
+            ? "동작 중 (활성화된 알람 없음)"
+            : $"다음 알람까지: {TimeSpan.FromSeconds(min.Value):hh\\:mm\\:ss}");
     }
 
     private void OpenAlarmSettings()
     {
-        bool was = TopMost;
-        TopMost = false;
         using var form = new AlarmForm();
-        if (form.ShowDialog(this) != DialogResult.OK)
-        {
-            TopMost = was;
-            return;
-        }
-        TopMost = was;
+        if (form.ShowDialog(this) != DialogResult.OK) return;
 
         for (int i = 0; i < 8; i++)
             if (_config.AlarmEnabled[i]) _remaining[i] = AlarmSeconds[i];
@@ -309,6 +271,43 @@ public partial class Form1 : Form
         UpdateNextAlarmLabel();
     }
 
+    // ===== 볼륨/투명도 숫자 직접입력 =====
+    private void BeginInlineEdit(Label label, NSlider slider)
+    {
+        _editingSlider = slider;
+        tbInlineEdit.Text = slider.Value.ToString();
+        tbInlineEdit.Width = Math.Max(40, label.Width);
+        tbInlineEdit.Location = new Point(label.Left, label.Top - 2);
+        tbInlineEdit.Visible = true;
+        tbInlineEdit.BringToFront();
+        tbInlineEdit.Focus();
+        tbInlineEdit.SelectAll();
+    }
+
+    private void CommitInlineEdit()
+    {
+        if (_editingSlider is { } slider && int.TryParse(tbInlineEdit.Text, out int value))
+            slider.Value = Math.Clamp(value, slider.Minimum, slider.Maximum);
+
+        tbInlineEdit.Visible = false;
+        _editingSlider = null;
+    }
+
+    private void InlineEdit_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode == Keys.Enter)
+        {
+            e.SuppressKeyPress = true;
+            CommitInlineEdit();
+        }
+        else if (e.KeyCode == Keys.Escape)
+        {
+            e.SuppressKeyPress = true;
+            tbInlineEdit.Visible = false;
+            _editingSlider = null;
+        }
+    }
+
     // ===== 메뉴 명령 분기 =====
     private void MenuStrip_ItemClicked(object? sender, ToolStripItemClickedEventArgs e)
     {
@@ -319,11 +318,13 @@ public partial class Form1 : Form
             case ToolStripCommand.ADD_SITE:
                 AddSite();
                 break;
+
             case ToolStripCommand.TOPMOST:
                 TopMost = menuTopmost.Checked;
                 _config.TopMost = TopMost;
                 _config.Save();
                 break;
+
             case ToolStripCommand.TOGGLE_HIDE_WINDOW_BORDER:
                 _config.IsHideWindowBorderOnFocusOut = menuHideBorder.Checked;
                 _config.Save();
@@ -334,15 +335,11 @@ public partial class Form1 : Form
     // ===== 사이트 목록 =====
     private void AddSite()
     {
-        bool was = TopMost;
-        TopMost = false;
         using var form = new SiteForm();
-        bool ok = form.ShowDialog(this) == DialogResult.OK && form.Result is not null;
-        TopMost = was;
-        if (!ok) return;
+        if (form.ShowDialog(this) != DialogResult.OK || form.Result is not { } site) return;
 
-        _config.Sites.Add(form.Result!);
-        siteList.AddSite(form.Result!);
+        _config.Sites.Add(site);
+        siteList.AddSite(site);
         _config.Save();
     }
 
@@ -370,7 +367,7 @@ public partial class Form1 : Form
         SendMessage(Handle, WM_NCLBUTTONDOWN, HTCAPTION, IntPtr.Zero);
     }
 
-    // ===== 포커스 아웃 시 테두리 숨김 =====
+    // ===== 포커스 아웃 시 테두리(타이틀바/메뉴바) 숨김 =====
     private void Form1_Activated(object? sender, EventArgs e)
     {
         if (!_config.IsHideWindowBorderOnFocusOut) return;
@@ -436,29 +433,22 @@ public partial class Form1 : Form
         if (m.Msg != WM_NCHITTEST || WindowState != FormWindowState.Normal || (int)m.Result != HTCLIENT)
             return;
 
-        int lp = m.LParam.ToInt32();
-        int x = unchecked((short)(lp & 0xFFFF));
-        int y = unchecked((short)((lp >> 16) & 0xFFFF));
+        int x = unchecked((short)(m.LParam.ToInt32() & 0xFFFF));
+        int y = unchecked((short)((m.LParam.ToInt32() >> 16) & 0xFFFF));
         var pos = ReSize.GetMousePosition(this, PointToClient(new Point(x, y)));
 
+        // 8방향 리사이즈 힌트 (테두리 두께는 ReSize.RESIZE_THICK)
         m.Result = (IntPtr)(pos switch
         {
-            ReSize.MousePosition.Left        => HTLEFT,
-            ReSize.MousePosition.Right       => HTRIGHT,
-            ReSize.MousePosition.Top         => HTTOP,
-            ReSize.MousePosition.Bottom      => HTBOTTOM,
-            ReSize.MousePosition.TopLeft     => HTTOPLEFT,
-            ReSize.MousePosition.TopRight    => HTTOPRIGHT,
-            ReSize.MousePosition.BottomLeft  => HTBOTTOMLEFT,
+            ReSize.MousePosition.Left => HTLEFT,
+            ReSize.MousePosition.Right => HTRIGHT,
+            ReSize.MousePosition.Top => HTTOP,
+            ReSize.MousePosition.Bottom => HTBOTTOM,
+            ReSize.MousePosition.TopLeft => HTTOPLEFT,
+            ReSize.MousePosition.TopRight => HTTOPRIGHT,
+            ReSize.MousePosition.BottomLeft => HTBOTTOMLEFT,
             ReSize.MousePosition.BottomRight => HTBOTTOMRIGHT,
-            _                               => HTCLIENT
+            _ => HTCLIENT
         });
-    }
-
-    protected override void OnMouseMove(MouseEventArgs e)
-    {
-        base.OnMouseMove(e);
-        if (WindowState == FormWindowState.Normal)
-            Cursor = ReSize.SetThick(ReSize.GetMousePosition(this, e.Location));
     }
 }
