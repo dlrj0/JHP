@@ -221,15 +221,7 @@ namespace JHP
             MinimumSize     = new Size(760, 420);
             FormBorderStyle = FormBorderStyle.None;
             Text            = "JHP";
-
-            // 작업표시줄/Alt-Tab 아이콘 (Resources/app.ico — csproj에서 출력 폴더로 복사됨)
-            try
-            {
-                string iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Resources", "app.ico");
-                if (System.IO.File.Exists(iconPath))
-                    Icon = new Icon(iconPath);
-            }
-            catch { /* 아이콘 파일이 없어도 앱 동작에는 영향 없음 */ }
+            // 아이콘 로딩은 Form1.cs 생성자에서 처리 (디자이너가 try/catch를 파싱하지 못함)
 
             // ① Controls.Add 순서 수정 (Dock=Top은 역 z-order 처리)
             // 나중에 추가할수록 z-order가 높아져 더 위에 위치함
