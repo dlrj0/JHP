@@ -168,6 +168,7 @@ namespace JHP
             menuStrip.ForeColor = Color.White;
             menuStrip.Dock      = DockStyle.Fill;
             menuStrip.GripStyle = ToolStripGripStyle.Hidden;
+            menuStrip.Renderer  = new DarkMenuRenderer(); // 기본 렌더러의 밝은 호버색 → 다크테마에 맞게 교체
             menuStrip.Items.Add(menuAddSite);
             menuStrip.Items.Add(menuTopmost);
             menuStrip.Items.Add(menuHideBorder);
