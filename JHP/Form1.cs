@@ -2,6 +2,7 @@ using JHP.Api;
 using JHP.Asset;
 using JHP.Controls;
 using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
