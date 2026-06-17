@@ -34,6 +34,5 @@
   └─ https://raw.githubusercontent.com/dlrj0/JHP/test/CHANGELOG.md
   └─ https://raw.githubusercontent.com/dlrj0/JHP/test/JHP.slnx
   └─ https://raw.githubusercontent.com/dlrj0/JHP/test/README.md
-  └─ https://raw.githubusercontent.com/dlrj0/JHP/test/JHP_완전통합가이드_v2.md
-  └─ https://raw.githubusercontent.com/dlrj0/JHP/test/JHP_가이드_통합본.md
+  └─ https://raw.githubusercontent.com/dlrj0/JHP/test/Jhp_완전통합가이드_v3.md
   └─ https://raw.githubusercontent.com/dlrj0/JHP/test/JHP_UI개선지시서_v2.md
