@@ -1,4 +1,3 @@
-using JHP.Api;
 using JHP.Controls;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -6,230 +5,61 @@ namespace JHP
 {
     partial class Form1
     {
-        private System.ComponentModel.IContainer components = null;
+        private System.ComponentModel.IContainer? components = null;
 
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
                 webView?.Dispose();
+                timer?.Dispose();
                 components?.Dispose();
             }
             base.Dispose(disposing);
         }
 
-        private System.Windows.Forms.Timer timer;
+        // ── 타이머 ──
+        private System.Windows.Forms.Timer? timer;
 
-        private Panel pnlTitleBar;
-        private Label lblTitle;
-        private Label lblNextAlarm;
-        private Label lblVolumeValue;
-        private Label lblOpacityValue;
-        private NSlider sliderVolume;
-        private NSlider sliderOpacity;
-        private Button btnAlarmSettings;
-        private ControlButton btnMinimize;
-        private ControlButton btnMaximize;
-        private ControlButton btnClose;
+        // ── 타이틀바 ──
+        private Panel          pnlTitleBar  = null!;
+        private Label          lblNextAlarm = null!;
+        private ControlButton  btnClose     = null!;
+        private ControlButton  btnMaximize  = null!;
+        private ControlButton  btnMinimize  = null!;
+        private ComboBox       cmbSite      = null!;
+        private CheckBox       cbTopMost    = null!;
+        private CheckBox       cbHideBorder = null!;
 
-        private Panel pnlMenuBar;
-        private MenuStrip menuStrip;
-        private ToolStripMenuItem menuAddSite;
-        private ToolStripMenuItem menuTopmost;
-        private ToolStripMenuItem menuHideBorder;
+        // ── 메인 영역 ──
+        private SplitContainer splitMain = null!;
+        private WebView2       webView   = null!;
+        private Panel          pnlAlarm  = null!;
 
-        private Panel pnlSidebar;
-        private SiteListViewControl siteList;
-        private Panel pnlSidebarBottom;
-        private Button btnAddSite;
-        private Button btnRemoveSite;
-
-        private WebView2 webView;
+        // ── 알람 패널 컨트롤 ──
+        private readonly CheckBox[]       alarmChecks   = new CheckBox[8];
+        private readonly TextBox[]        customNames   = new TextBox[3];
+        private readonly NumericUpDown[]  customTicks   = new NumericUpDown[3];
+        private readonly CheckBox[]       customEnabled = new CheckBox[3];
+        private ComboBox  cmbAlarmFile    = null!;
+        private NSlider   sliderVolume    = null!;
+        private Label     lblVolumeValue  = null!;
+        private CheckBox  cbTts           = null!;
+        private NSlider   sliderRate      = null!;
+        private Button    btnAlarmSettings = null!;
 
         private void InitializeComponent()
         {
-            components = new System.ComponentModel.Container();
-            timer = new System.Windows.Forms.Timer(components) { Interval = 1000 };
-
-            pnlTitleBar      = new Panel();
-            lblTitle         = new Label();
-            lblNextAlarm     = new Label();
-            lblVolumeValue   = new Label();
-            lblOpacityValue  = new Label();
-            sliderVolume     = new NSlider();
-            sliderOpacity    = new NSlider();
-            btnAlarmSettings = new Button();
-            btnMinimize      = new ControlButton();
-            btnMaximize      = new ControlButton();
-            btnClose         = new ControlButton();
-
-            pnlMenuBar    = new Panel();
-            menuStrip     = new MenuStrip();
-            menuAddSite   = new ToolStripMenuItem();
-            menuTopmost   = new ToolStripMenuItem();
-            menuHideBorder = new ToolStripMenuItem();
-
-            pnlSidebar       = new Panel();
-            siteList         = new SiteListViewControl();
-            pnlSidebarBottom = new Panel();
-            btnAddSite       = new Button();
-            btnRemoveSite    = new Button();
-
-            webView = new WebView2();
-
             SuspendLayout();
 
-            // ===== 타이틀바 =====
-            pnlTitleBar.Dock      = DockStyle.Top;
-            pnlTitleBar.Height    = 36;
-            pnlTitleBar.BackColor = Color.FromArgb(28, 28, 28);
-
-            lblTitle.AutoSize  = true;
-            lblTitle.Font      = new Font("Segoe UI", 10F, FontStyle.Bold);
-            lblTitle.ForeColor = Color.White;
-            lblTitle.Location  = new Point(12, 9);
-            lblTitle.Text      = "JHP";
-
-            lblNextAlarm.AutoSize  = true;
-            lblNextAlarm.ForeColor = Color.FromArgb(150, 200, 255);
-            lblNextAlarm.Location  = new Point(64, 10);
-            lblNextAlarm.Text      = "⏱ 클릭하여 시작";
-
-            lblVolumeValue.AutoSize  = true;
-            lblVolumeValue.ForeColor = Color.LightGray;
-            lblVolumeValue.Location  = new Point(330, 10);
-            lblVolumeValue.Text      = "볼륨 50";
-
-            sliderVolume.Location = new Point(388, 11);
-            sliderVolume.Size     = new Size(90, 20);
-            sliderVolume.Minimum  = 0;
-            sliderVolume.Maximum  = 100;
-
-            lblOpacityValue.AutoSize  = true;
-            lblOpacityValue.ForeColor = Color.LightGray;
-            lblOpacityValue.Location  = new Point(490, 10);
-            lblOpacityValue.Text      = "투명도 100%";
-
-            sliderOpacity.Location = new Point(570, 11);
-            sliderOpacity.Size     = new Size(90, 20);
-            sliderOpacity.Minimum  = 30;
-            sliderOpacity.Maximum  = 100;
-
-            btnAlarmSettings.Anchor    = AnchorStyles.Top | AnchorStyles.Right;
-            btnAlarmSettings.BackColor = Color.FromArgb(28, 28, 28);
-            btnAlarmSettings.FlatStyle = FlatStyle.Flat;
-            btnAlarmSettings.FlatAppearance.BorderSize = 0;
-            btnAlarmSettings.ForeColor = Color.White;
-            btnAlarmSettings.Location  = new Point(818, 4);
-            btnAlarmSettings.Size      = new Size(36, 28);
-            btnAlarmSettings.Text      = "⏰";
-            btnAlarmSettings.UseVisualStyleBackColor = false;
-
-            btnMinimize.Anchor   = AnchorStyles.Top | AnchorStyles.Right;
-            btnMinimize.Location = new Point(862, 3);
-            btnMinimize.Type     = ControlButton.ButtonType.Minimize;
-
-            btnMaximize.Anchor   = AnchorStyles.Top | AnchorStyles.Right;
-            btnMaximize.Location = new Point(908, 3);
-            btnMaximize.Type     = ControlButton.ButtonType.Maximize;
-
-            btnClose.Anchor   = AnchorStyles.Top | AnchorStyles.Right;
-            btnClose.Location = new Point(954, 3);
-            btnClose.Type     = ControlButton.ButtonType.Close;
-
-            pnlTitleBar.Controls.Add(lblTitle);
-            pnlTitleBar.Controls.Add(lblNextAlarm);
-            pnlTitleBar.Controls.Add(lblVolumeValue);
-            pnlTitleBar.Controls.Add(sliderVolume);
-            pnlTitleBar.Controls.Add(lblOpacityValue);
-            pnlTitleBar.Controls.Add(sliderOpacity);
-            pnlTitleBar.Controls.Add(btnAlarmSettings);
-            pnlTitleBar.Controls.Add(btnMinimize);
-            pnlTitleBar.Controls.Add(btnMaximize);
-            pnlTitleBar.Controls.Add(btnClose);
-
-            // ===== 메뉴바 =====
-            pnlMenuBar.Dock      = DockStyle.Top;
-            pnlMenuBar.Height    = 28;
-            pnlMenuBar.BackColor = Color.FromArgb(40, 40, 40);
-
-            menuAddSite.Text = "사이트 추가";
-            menuAddSite.Tag  = ToolStripCommand.ADD_SITE;
-
-            menuTopmost.Text         = "항상 위";
-            menuTopmost.CheckOnClick = true;
-            menuTopmost.Tag          = ToolStripCommand.TOPMOST;
-
-            menuHideBorder.Text         = "테두리 숨김 (포커스 아웃)";
-            menuHideBorder.CheckOnClick = true;
-            menuHideBorder.Tag          = ToolStripCommand.TOGGLE_HIDE_WINDOW_BORDER;
-
-            menuStrip.BackColor = Color.FromArgb(40, 40, 40);
-            menuStrip.ForeColor = Color.White;
-            menuStrip.Dock      = DockStyle.Fill;
-            menuStrip.GripStyle = ToolStripGripStyle.Hidden;
-            menuStrip.Renderer  = new DarkMenuRenderer(); // 기본 렌더러의 밝은 호버색 → 다크테마에 맞게 교체
-            menuStrip.Items.Add(menuAddSite);
-            menuStrip.Items.Add(menuTopmost);
-            menuStrip.Items.Add(menuHideBorder);
-
-            pnlMenuBar.Controls.Add(menuStrip);
-
-            // ===== 사이드바 =====
-            pnlSidebar.Dock      = DockStyle.Left;
-            pnlSidebar.Width     = 180;
-            pnlSidebar.BackColor = Color.FromArgb(30, 30, 30);
-
-            siteList.Dock = DockStyle.Fill;
-
-            pnlSidebarBottom.Dock      = DockStyle.Bottom;
-            pnlSidebarBottom.Height    = 34;
-            pnlSidebarBottom.BackColor = Color.FromArgb(40, 40, 40);
-
-            btnAddSite.Dock      = DockStyle.Left;
-            btnAddSite.Width     = 90;
-            btnAddSite.FlatStyle = FlatStyle.Flat;
-            btnAddSite.FlatAppearance.BorderSize = 0;
-            btnAddSite.BackColor = Color.FromArgb(55, 90, 145);
-            btnAddSite.ForeColor = Color.White;
-            btnAddSite.Text      = "추가";
-            btnAddSite.UseVisualStyleBackColor = false;
-
-            btnRemoveSite.Dock      = DockStyle.Right;
-            btnRemoveSite.Width     = 90;
-            btnRemoveSite.FlatStyle = FlatStyle.Flat;
-            btnRemoveSite.FlatAppearance.BorderSize = 0;
-            btnRemoveSite.BackColor = Color.FromArgb(60, 60, 60);
-            btnRemoveSite.ForeColor = Color.White;
-            btnRemoveSite.Text      = "삭제";
-            btnRemoveSite.UseVisualStyleBackColor = false;
-
-            pnlSidebarBottom.Controls.Add(btnAddSite);
-            pnlSidebarBottom.Controls.Add(btnRemoveSite);
-
-            pnlSidebar.Controls.Add(siteList);
-            pnlSidebar.Controls.Add(pnlSidebarBottom);
-
-            // ===== 웹뷰 =====
-            webView.Dock                 = DockStyle.Fill;
-            webView.DefaultBackgroundColor = Color.FromArgb(24, 24, 24);
-
-            // ===== Form1 =====
+            // 폼 기본 속성만 설정
+            // 모든 컨트롤 생성 및 배치는 Form1.cs 의 InitControls() 에서 처리
             AutoScaleMode   = AutoScaleMode.Font;
-            BackColor       = Color.FromArgb(24, 24, 24);
-            ClientSize      = new Size(1000, 650);
-            MinimumSize     = new Size(760, 420);
+            BackColor       = Color.FromArgb(20, 20, 20);
+            ClientSize      = new Size(1100, 700);
+            MinimumSize     = new Size(700, 450);
             FormBorderStyle = FormBorderStyle.None;
             Text            = "JHP";
-            // 아이콘 로딩은 Form1.cs 생성자에서 처리 (디자이너가 try/catch를 파싱하지 못함)
-
-            // ① Controls.Add 순서 수정 (Dock=Top은 역 z-order 처리)
-            // 나중에 추가할수록 z-order가 높아져 더 위에 위치함
-            // webView(Fill) → pnlSidebar(Left) → pnlMenuBar(Top) → pnlTitleBar(Top=최상단)
-            Controls.Add(webView);        // Fill — 나머지 공간 채움
-            Controls.Add(pnlSidebar);     // Left
-            Controls.Add(pnlMenuBar);     // Top — pnlTitleBar 아래
-            Controls.Add(pnlTitleBar);    // Top — 마지막 추가 = 최상단
 
             ResumeLayout(false);
         }
