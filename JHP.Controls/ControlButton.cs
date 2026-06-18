@@ -54,7 +54,7 @@ public class ControlButton : Button
     protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); Invalidate(); }
     protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); Invalidate(); }
 
-    // 초기 표시 시 아이콘이 마우스 호버 전까지 보이지 않는 문제 방지 (TimerButton.cs와 동일 패턴)
+    // 초기 렌더링 버그 수정: 핸들 생성 직후 강제로 한 번 더 그려줌 (Timerbutton.cs와 동일 패턴)
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
