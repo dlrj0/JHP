@@ -6,20 +6,32 @@ namespace JHP;
 
 public class AlarmForm : Form
 {
+    // [0]=2h [1]=1h [2]=30m [3]=20m [4]=15m [5]=10m [6]=100s [7]=55s
     private static readonly string[] AlarmLabels = ["2시간", "1시간", "30분", "20분", "15분", "10분", "100초", "55초"];
+
+    // 자체 타이틀바
+    private Panel _pnlTitle = null!;
+    private Label _lblFormTitle = null!;
+    private ControlButton _btnClose = null!;
 
     private readonly CheckBox[] _alarmChecks = new CheckBox[8];
     private readonly TextBox[] _customNames = new TextBox[3];
     private readonly NumericUpDown[] _customTicks = new NumericUpDown[3];
     private readonly CheckBox[] _customEnabled = new CheckBox[3];
 
-    private Panel _pnlTitle = null!;
     private TextBox _tbAlarmName = null!;
     private CheckBox _cbTts = null!;
     private TrackBar _tbVolume = null!;
     private TrackBar _tbRate = null!;
     private Label _lblVolume = null!;
     private Label _lblRate = null!;
+
+    private Button _btnOk = null!;
+    private Button _btnCancel = null!;
+
+    private const int TitleH = 32;  // 자체 타이틀바 높이
+    private const int Pad = 12;     // 상단 패딩
+    private const int ContentW = 600;
 
     public AlarmForm()
     {
@@ -29,49 +41,47 @@ public class AlarmForm : Form
 
     private void InitializeComponent()
     {
-        Text = "알람 설정";
-        Width = 600;
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterParent;
+        Width = ContentW;
         BackColor = Color.FromArgb(32, 32, 32);
         ForeColor = Color.White;
-        MinimumSize = new Size(480, 360);
+        MinimumSize = new Size(420, 400);
 
         // ===== 자체 타이틀바 =====
         _pnlTitle = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 32,
-            BackColor = Color.FromArgb(24, 24, 24)
+            Height = TitleH,
+            BackColor = Color.FromArgb(22, 22, 22)
         };
-
-        var lblCaption = new Label
+        _lblFormTitle = new Label
         {
             Text = "알람 설정",
             ForeColor = Color.White,
-            Font = new Font("Segoe UI", 10F, FontStyle.Bold),
             AutoSize = true,
-            Location = new Point(10, 7)
+            Location = new Point(12, 8)
         };
-
-        var btnClose = new ControlButton
+        _btnClose = new ControlButton
         {
+            Type = ControlButton.ButtonType.Close,
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            Location = new Point(Width - 46, 1),
-            Type = ControlButton.ButtonType.Close
+            Location = new Point(ContentW - 46, 1)
         };
-        btnClose.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
-
-        _pnlTitle.Controls.Add(lblCaption);
-        _pnlTitle.Controls.Add(btnClose);
+        _btnClose.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
         _pnlTitle.MouseDown += TitleBar_MouseDown;
-        lblCaption.MouseDown += TitleBar_MouseDown;
-
+        _lblFormTitle.MouseDown += TitleBar_MouseDown;
+        _pnlTitle.Controls.Add(_lblFormTitle);
+        _pnlTitle.Controls.Add(_btnClose);
         Controls.Add(_pnlTitle);
 
-        // ===== 본문 (타이틀바 아래에서 시작) =====
-        int y = 44;
+        // ===== 컨텐츠 (y 좌표는 TitleH 아래부터) =====
+        int y = TitleH + Pad;
+        int labelW = 90;
+        int ctrlX = 108;
+        int ctrlW = ContentW - ctrlX - Pad;
 
+        // 고정 알람 8개 (4열, 135px 간격)
         AddLabel("재획비 알람", 12, y, 200);
         y += 22;
         for (int i = 0; i < 8; i++)
@@ -81,48 +91,63 @@ public class AlarmForm : Form
                 Text = AlarmLabels[i],
                 Left = 12 + (i % 4) * 135,
                 Top = y + (i / 4) * 28,
-                Width = 128,
+                Width = 129,
                 ForeColor = Color.White
             };
             Controls.Add(_alarmChecks[i]);
         }
         y += 64;
 
-        AddLabel("알람 파일명", 12, y + 3, 90);
+        // 알람 파일명
+        AddLabel("알람 파일명", 12, y + 3, labelW);
         _tbAlarmName = new TextBox
         {
-            Left = 108, Top = y, Width = ClientSize.Width - 120,
+            Left = ctrlX,
+            Top = y,
+            Width = ctrlW,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
         Controls.Add(_tbAlarmName);
         y += 32;
 
+        // TTS
         _cbTts = new CheckBox { Text = "TTS 사용", Left = 12, Top = y, Width = 100, ForeColor = Color.White };
         Controls.Add(_cbTts);
         y += 30;
 
-        _lblVolume = AddLabel("볼륨: 0", 12, y + 8, 90);
+        // 볼륨
+        _lblVolume = AddLabel("볼륨: 0", 12, y + 8, labelW);
         _tbVolume = new TrackBar
         {
-            Left = 108, Top = y, Width = ClientSize.Width - 120,
-            Minimum = 0, Maximum = 100, TickFrequency = 10,
+            Left = ctrlX,
+            Top = y,
+            Width = ctrlW,
+            Minimum = 0,
+            Maximum = 100,
+            TickFrequency = 10,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
-        _tbVolume.ValueChanged += (s, e) => _lblVolume.Text = $"볼륨: {_tbVolume.Value}";
+        _tbVolume.ValueChanged += (_, _) => _lblVolume.Text = $"볼륨: {_tbVolume.Value}";
         Controls.Add(_tbVolume);
         y += 42;
 
-        _lblRate = AddLabel("속도: 0", 12, y + 8, 90);
+        // TTS 속도
+        _lblRate = AddLabel("속도: 0", 12, y + 8, labelW);
         _tbRate = new TrackBar
         {
-            Left = 108, Top = y, Width = ClientSize.Width - 120,
-            Minimum = -10, Maximum = 10, TickFrequency = 2,
+            Left = ctrlX,
+            Top = y,
+            Width = ctrlW,
+            Minimum = -10,
+            Maximum = 10,
+            TickFrequency = 2,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
-        _tbRate.ValueChanged += (s, e) => _lblRate.Text = $"속도: {_tbRate.Value}";
+        _tbRate.ValueChanged += (_, _) => _lblRate.Text = $"속도: {_tbRate.Value}";
         Controls.Add(_tbRate);
         y += 42;
 
+        // 커스텀 알람 3개
         AddLabel("커스텀 알람", 12, y, 200);
         y += 22;
         for (int i = 0; i < 3; i++)
@@ -132,50 +157,65 @@ public class AlarmForm : Form
 
             _customNames[i] = new TextBox
             {
-                Left = 36, Top = y, Width = 190, PlaceholderText = "알람 이름",
+                Left = 36,
+                Top = y,
+                Width = 240,
+                PlaceholderText = "알람 이름",
                 Anchor = AnchorStyles.Top | AnchorStyles.Left
             };
             Controls.Add(_customNames[i]);
 
-            _customTicks[i] = new NumericUpDown { Left = 234, Top = y, Width = 80, Minimum = 0, Maximum = 99999 };
+            _customTicks[i] = new NumericUpDown
+            {
+                Left = 284,
+                Top = y,
+                Width = 80,
+                Minimum = 0,
+                Maximum = 99999,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left
+            };
             Controls.Add(_customTicks[i]);
 
-            AddLabel("초", 320, y + 3, 30);
+            AddLabel("초", 370, y + 3, 30);
             y += 32;
         }
 
         y += 8;
 
-        var btnOk = new Button
+        _btnOk = new Button
         {
             Text = "확인",
-            Left = ClientSize.Width - 180, Top = y, Width = 80,
+            Left = ContentW - 180,
+            Top = y,
+            Width = 80,
             DialogResult = DialogResult.OK,
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(55, 90, 145),
             ForeColor = Color.White,
             Anchor = AnchorStyles.Bottom | AnchorStyles.Right
         };
-        btnOk.FlatAppearance.BorderSize = 0;
-        btnOk.Click += BtnOk_Click;
-        Controls.Add(btnOk);
+        _btnOk.FlatAppearance.BorderSize = 0;
+        _btnOk.Click += BtnOk_Click;
+        Controls.Add(_btnOk);
 
-        var btnCancel = new Button
+        _btnCancel = new Button
         {
             Text = "취소",
-            Left = ClientSize.Width - 92, Top = y, Width = 80,
+            Left = ContentW - 92,
+            Top = y,
+            Width = 80,
             DialogResult = DialogResult.Cancel,
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(60, 60, 60),
             ForeColor = Color.White,
             Anchor = AnchorStyles.Bottom | AnchorStyles.Right
         };
-        btnCancel.FlatAppearance.BorderSize = 0;
-        Controls.Add(btnCancel);
+        _btnCancel.FlatAppearance.BorderSize = 0;
+        Controls.Add(_btnCancel);
 
-        Height = y + 72;
-        AcceptButton = btnOk;
-        CancelButton = btnCancel;
+        Height = y + 60;
+        AcceptButton = _btnOk;
+        CancelButton = _btnCancel;
     }
 
     private Label AddLabel(string text, int left, int top, int width)
@@ -230,7 +270,7 @@ public class AlarmForm : Form
         SendMessage(Handle, WM_NCLBUTTONDOWN, HTCAPTION, IntPtr.Zero);
     }
 
-    // ===== 8방향 리사이즈 (Form1.cs와 동일 패턴) =====
+    // ===== 8방향 리사이즈 (WM_NCHITTEST) =====
     private const int WM_NCHITTEST = 0x0084;
     private const int HTCLIENT = 1;
     private const int HTCAPTION = 2;
@@ -253,8 +293,8 @@ public class AlarmForm : Form
     protected override void WndProc(ref Message m)
     {
         base.WndProc(ref m);
-        if (m.Msg != WM_NCHITTEST || WindowState != FormWindowState.Normal || (int)m.Result != HTCLIENT)
-            return;
+
+        if (m.Msg != WM_NCHITTEST || (int)m.Result != HTCLIENT) return;
 
         int x = unchecked((short)(m.LParam.ToInt32() & 0xFFFF));
         int y = unchecked((short)((m.LParam.ToInt32() >> 16) & 0xFFFF));
@@ -272,5 +312,12 @@ public class AlarmForm : Form
             ReSize.MousePosition.BottomRight => HTBOTTOMRIGHT,
             _ => HTCLIENT
         });
+    }
+
+    // 리사이즈 커서 시각적 피드백
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        Cursor = ReSize.SetThick(ReSize.GetMousePosition(this, e.Location));
     }
 }
