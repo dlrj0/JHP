@@ -1,4 +1,3 @@
-using JHP.Api;
 using JHP.Controls;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -22,6 +21,7 @@ namespace JHP
         private System.Windows.Forms.ToolTip toolTip;
 
         private Panel pnlTitleBar;
+        private Button btnMenu;
         private Label lblTitle;
         private TimerButton timerButton;
         private Label lblVolumeValue;
@@ -33,18 +33,6 @@ namespace JHP
         private ControlButton btnMaximize;
         private ControlButton btnClose;
 
-        private Panel pnlMenuBar;
-        private MenuStrip menuStrip;
-        private ToolStripMenuItem menuAddSite;
-        private ToolStripMenuItem menuTopmost;
-        private ToolStripMenuItem menuHideBorder;
-
-        private Panel pnlSidebar;
-        private SiteListViewControl siteList;
-        private Panel pnlSidebarBottom;
-        private Button btnAddSite;
-        private Button btnRemoveSite;
-
         private WebView2 webView;
 
         private void InitializeComponent()
@@ -54,6 +42,7 @@ namespace JHP
             toolTip = new System.Windows.Forms.ToolTip(components);
 
             pnlTitleBar = new Panel();
+            btnMenu = new Button();
             lblTitle = new Label();
             timerButton = new TimerButton();
             lblVolumeValue = new Label();
@@ -64,18 +53,6 @@ namespace JHP
             btnMinimize = new ControlButton();
             btnMaximize = new ControlButton();
             btnClose = new ControlButton();
-
-            pnlMenuBar = new Panel();
-            menuStrip = new MenuStrip();
-            menuAddSite = new ToolStripMenuItem();
-            menuTopmost = new ToolStripMenuItem();
-            menuHideBorder = new ToolStripMenuItem();
-
-            pnlSidebar = new Panel();
-            siteList = new SiteListViewControl();
-            pnlSidebarBottom = new Panel();
-            btnAddSite = new Button();
-            btnRemoveSite = new Button();
 
             webView = new WebView2();
 
@@ -89,32 +66,47 @@ namespace JHP
             lblTitle.AutoSize = true;
             lblTitle.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
             lblTitle.ForeColor = Color.White;
-            lblTitle.Location = new Point(12, 9);
+            lblTitle.Location = new Point(48, 9);
             lblTitle.Text = "JHP";
+
+            // V버튼: 타이틀바 맨 왼쪽 — 사이트 목록 + 사이트 추가 + 항상위/테두리숨김을 드롭다운으로 흡수
+            // (구버전의 pnlMenuBar/menuStrip, pnlSidebar/siteList 대체)
+            btnMenu.Location = new Point(3, 4);
+            btnMenu.Size = new Size(28, 28);
+            btnMenu.BackColor = Color.FromArgb(28, 28, 28);
+            btnMenu.FlatStyle = FlatStyle.Flat;
+            btnMenu.FlatAppearance.BorderSize = 0;
+            btnMenu.FlatAppearance.MouseOverBackColor = Color.FromArgb(60, 60, 60);
+            btnMenu.FlatAppearance.MouseDownBackColor = Color.FromArgb(55, 90, 145);
+            btnMenu.ForeColor = Color.White;
+            btnMenu.Font = new Font("Segoe UI", 9F);
+            btnMenu.Text = "▼";
+            btnMenu.Cursor = Cursors.Hand;
+            btnMenu.UseVisualStyleBackColor = false;
 
             // timerButton: lblNextAlarm + btnAlarmSettings 대체
             // 좌클릭=타이머 시작/정지, 우클릭=알람설정
-            timerButton.Location = new Point(54, 3);
+            timerButton.Location = new Point(90, 3);
             timerButton.Size = new Size(30, 30);
 
             lblVolumeValue.AutoSize = true;
             lblVolumeValue.ForeColor = Color.LightGray;
-            lblVolumeValue.Location = new Point(100, 10);
+            lblVolumeValue.Location = new Point(136, 10);
             lblVolumeValue.Text = "볼륨 50";
             lblVolumeValue.Cursor = Cursors.IBeam;
 
-            sliderVolume.Location = new Point(158, 11);
+            sliderVolume.Location = new Point(194, 11);
             sliderVolume.Size = new Size(170, 20);
             sliderVolume.Minimum = 0;
             sliderVolume.Maximum = 100;
 
             lblOpacityValue.AutoSize = true;
             lblOpacityValue.ForeColor = Color.LightGray;
-            lblOpacityValue.Location = new Point(342, 10);
+            lblOpacityValue.Location = new Point(378, 10);
             lblOpacityValue.Text = "투명도 100%";
             lblOpacityValue.Cursor = Cursors.IBeam;
 
-            sliderOpacity.Location = new Point(430, 11);
+            sliderOpacity.Location = new Point(466, 11);
             sliderOpacity.Size = new Size(170, 20);
             sliderOpacity.Minimum = 30;
             sliderOpacity.Maximum = 100;
@@ -139,6 +131,7 @@ namespace JHP
             btnClose.Type = ControlButton.ButtonType.Close;
 
             pnlTitleBar.Controls.Add(lblTitle);
+            pnlTitleBar.Controls.Add(btnMenu);
             pnlTitleBar.Controls.Add(timerButton);
             pnlTitleBar.Controls.Add(lblVolumeValue);
             pnlTitleBar.Controls.Add(sliderVolume);
@@ -148,67 +141,6 @@ namespace JHP
             pnlTitleBar.Controls.Add(btnMinimize);
             pnlTitleBar.Controls.Add(btnMaximize);
             pnlTitleBar.Controls.Add(btnClose);
-
-            // ===== 메뉴바 =====
-            pnlMenuBar.Dock = DockStyle.Top;
-            pnlMenuBar.Height = 28;
-            pnlMenuBar.BackColor = Color.FromArgb(40, 40, 40);
-
-            menuAddSite.Text = "사이트 추가";
-            menuAddSite.Tag = ToolStripCommand.ADD_SITE;
-
-            menuTopmost.Text = "항상 위";
-            menuTopmost.CheckOnClick = true;
-            menuTopmost.Tag = ToolStripCommand.TOPMOST;
-
-            menuHideBorder.Text = "테두리 숨김 (포커스 아웃)";
-            menuHideBorder.CheckOnClick = true;
-            menuHideBorder.Tag = ToolStripCommand.TOGGLE_HIDE_WINDOW_BORDER;
-
-            menuStrip.BackColor = Color.FromArgb(40, 40, 40);
-            menuStrip.ForeColor = Color.White;
-            menuStrip.Dock = DockStyle.Fill;
-            menuStrip.GripStyle = ToolStripGripStyle.Hidden;
-            menuStrip.Items.Add(menuAddSite);
-            menuStrip.Items.Add(menuTopmost);
-            menuStrip.Items.Add(menuHideBorder);
-
-            pnlMenuBar.Controls.Add(menuStrip);
-
-            // ===== 사이드바 =====
-            pnlSidebar.Dock = DockStyle.Left;
-            pnlSidebar.Width = 180;
-            pnlSidebar.BackColor = Color.FromArgb(30, 30, 30);
-
-            siteList.Dock = DockStyle.Fill;
-
-            pnlSidebarBottom.Dock = DockStyle.Bottom;
-            pnlSidebarBottom.Height = 34;
-            pnlSidebarBottom.BackColor = Color.FromArgb(40, 40, 40);
-
-            btnAddSite.Dock = DockStyle.Left;
-            btnAddSite.Width = 90;
-            btnAddSite.FlatStyle = FlatStyle.Flat;
-            btnAddSite.FlatAppearance.BorderSize = 0;
-            btnAddSite.BackColor = Color.FromArgb(55, 90, 145);
-            btnAddSite.ForeColor = Color.White;
-            btnAddSite.Text = "추가";
-            btnAddSite.UseVisualStyleBackColor = false;
-
-            btnRemoveSite.Dock = DockStyle.Right;
-            btnRemoveSite.Width = 90;
-            btnRemoveSite.FlatStyle = FlatStyle.Flat;
-            btnRemoveSite.FlatAppearance.BorderSize = 0;
-            btnRemoveSite.BackColor = Color.FromArgb(60, 60, 60);
-            btnRemoveSite.ForeColor = Color.White;
-            btnRemoveSite.Text = "삭제";
-            btnRemoveSite.UseVisualStyleBackColor = false;
-
-            pnlSidebarBottom.Controls.Add(btnAddSite);
-            pnlSidebarBottom.Controls.Add(btnRemoveSite);
-
-            pnlSidebar.Controls.Add(siteList);
-            pnlSidebar.Controls.Add(pnlSidebarBottom);
 
             // ===== 웹뷰 =====
             webView.Dock = DockStyle.Fill;
@@ -222,12 +154,9 @@ namespace JHP
             FormBorderStyle = FormBorderStyle.None;
             Text = "JHP";
 
-            // ⚠️ Dock=Top 컨트롤은 역 z-order (나중에 추가 = 최상단).
-            // webView(Fill) → pnlSidebar(Left) → pnlMenuBar(Top, 2번째) → pnlTitleBar(Top, 최상단) 순서로
-            // 반드시 마지막에 pnlTitleBar를 추가해야 메뉴바가 타이틀바를 가리지 않음.
+            // pnlSidebar(Left)/pnlMenuBar(Top) 제거 — V버튼 드롭다운으로 흡수됨에 따라
+            // Dock=Top 패널이 pnlTitleBar 하나만 남아 z-order 문제가 사라짐.
             Controls.Add(webView);
-            Controls.Add(pnlSidebar);
-            Controls.Add(pnlMenuBar);
             Controls.Add(pnlTitleBar);
 
             ResumeLayout(false);
