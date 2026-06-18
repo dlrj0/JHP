@@ -59,6 +59,56 @@ Config.Instance.Sites              // List<Site>
 Config.Instance.DefaultSite
 Config.Instance.Save()
 ```
+# 메모
+코드 수정시 필요한 부분만 수정하고, 기존의 수정이필요없는 기능은 유지해야함.(a기능을 수정하려는데   ├── Form1.Designer.cs
+│   ├── AlarmForm.cs
+│   ├── SiteForm.cs
+│   └── Program.cs
+├── JHP.Api/             # 공용 유틸
+│   ├── Config.cs
+│   ├── ReSize.cs        ← 리사이즈 헬퍼 (static class)
+│   ├── Synth.cs
+│   ├── Site.cs
+│   ├── CustomAlarm.cs
+│   ├── ToolStripCommand.cs
+│   └── UpdateChecker.cs
+├── JHP.Controls/        # 커스텀 컨트롤
+│   ├── ControlButton.cs
+│   ├── TimerButton.cs
+│   ├── NSlider.cs
+│   ├── SiteListViewControl.cs
+│   ├── CustomCheckBox.cs
+│   └── DarkMenuRenderer.cs
+└── JHP.Asset/
+    └── UserScripts.cs
+```
+
+---
+
+## 📎 실제 API 시그니처 (변경 없음)
+
+```csharp
+Synth.Instance.Ring(string alarmName, int volume);
+Synth.Instance.TTS(string text, int volume, int rate);
+Synth.Instance.SetVolume(int volume);
+Synth.Instance.SetRate(int rate);
+Synth.Instance.Stop();
+
+// ReSize — static class, Form1.cs에서 WM_NCHITTEST 처리에 사용
+ReSize.GetMousePosition(Form form, Point cursor);  // → ReSize.MousePosition enum
+ReSize.SetThick(ReSize.MousePosition pos);         // → Cursor
+
+// Config (싱글턴)
+Config.Instance.Volume / Rate / Tts / AlarmName
+Config.Instance.AlarmEnabled[8]   // bool[]
+Config.Instance.CustomAlarms       // CustomAlarm[3] — .Name, .Tick, .Enabled
+Config.Instance.TopMost / IsHideWindowBorderOnFocusOut / Opacity
+Config.Instance.Sites              // List<Site>
+Config.Instance.DefaultSite
+Config.Instance.Save()
+```
+# 메모
+코드 수정시 필요한 부분만 수정하고, 기존의 수정이필요없는 기능은 유지해야함.(a기능을 수정하려는데b기능이 사라지는 일이 없어야함.)
 
 ---
 
