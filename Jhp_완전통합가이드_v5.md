@@ -1,32 +1,81 @@
-# JHP 완전통합가이드 v4
+# JHP — 완전 통합 가이드 v5
 
-> **새 Claude 대화 시작 시 이 파일을 붙여넣으세요.**
-> 이전 가이드(`v3`)와 진행상황 문서(`v5`)는 실제 GitHub 코드와 일치하지 않습니다 — 이 문서(v4)가 현재 기준입니다.
-> 작업 전 반드시 `raw.githubusercontent.com`에서 직접 fetch하여 실제 상태를 재확인하세요.
+> **새 Claude 대화를 시작할 때 이 파일 하나만 붙여넣으면 됩니다.**
+> 이 문서는 `v3`(설계/버그수정 근거) + `v4`(API/구조 참조) + `진행상황_v6`(최신 작성 파일)를 통합하고,
+> **2026-06-18에 GitHub raw URL을 직접 fetch하여 실제 상태를 재검증**한 최신 버전입니다.
+> .NET 10.0 WinForms + WebView2 / 모든 작업 Visual Studio GUI만 사용 (터미널/CLI 없음)
 
 ---
 
-## 🗂️ 프로젝트 구조 (test 브랜치 기준)
+## 🚨 가장 먼저 읽으세요 — 직접 검증 결과
+
+이전 세션들에서 "작성 완료, 적용 대기 중"이라고 보고된 4개 파일을 **방금 raw.githubusercontent.com에서 직접 fetch해서 확인**했습니다. 결과:
+
+| 파일 | GitHub `test` 브랜치 실제 상태 |
+|------|------|
+| `JHP.Controls/Timerbutton.cs` | ✅ 새 코드 반영됨 (`OnHandleCreated`, `Active`, `RightClick` 포함) — 파일명이 `TimerButton.cs`가 아니라 **`Timerbutton.cs`**(소문자 b)임에 주의 |
+| `JHP.Controls/ControlButton.cs` | ❌ **구버전** — `OnHandleCreated` 없음 |
+| `JHP/Form1.Designer.cs` | ❌ **구버전** — `lblNextAlarm`/`btnAlarmSettings` 그대로, 슬라이더 90px, `tbInlineEdit`/`toolTip` 없음 |
+| `JHP/Form1.cs` | ❌ **구버전** — `timerButton`/`ToggleTimer` 없음, 앱 시작 시 타이머 자동 시작 |
+| `JHP/AlarmForm.cs` | ❌ **구버전** — `FormBorderStyle.FixedDialog`, 폭 420px, 체크박스 컬럼 94px |
+
+**즉, "이전 세션에서 GitHub에 적용했다"는 보고는 이번에도 사실이 아니었습니다.** 새 코드는 여러 세션에 걸쳐 "작성"만 되었고 실제 커밋/푸시가 안 된 상태로 보입니다. 아래 ✅ 섹션의 4개 파일을 **Visual Studio에서 직접 열어 전체 내용을 교체하고 저장 → GitHub에 커밋/푸시**해야 합니다.
+
+> 📌 **다음 세션 시작 시 안내:** 이 작업을 하기 전에 항상 raw URL 4개를 다시 fetch해서 실제로 반영됐는지 먼저 확인하세요. "작성했다"≠"적용됐다"입니다.
+
+---
+
+## 📝 작업 원칙 (모든 세션 공통)
+
+> 코드 수정 시 필요한 부분만 수정하고, 수정이 필요 없는 기존 기능은 그대로 유지해야 합니다.
+> (A 기능을 수정하려다 B 기능이 사라지는 일이 없어야 함.)
+
+---
+
+## 🗺️ 프로젝트 기본 정보
+
+| 항목 | 값 |
+|------|-----|
+| GitHub | https://github.com/dlrj0/JHP (branch: `test`) |
+| 로컬 경로 | `C:\Users\wjgus\source\repos\dlrj0\JHP` |
+| 솔루션 | `JHP.slnx` |
+| 프로젝트 4개 | `JHP`(UI), `JHP.Api`(로직), `JHP.Controls`(커스텀 UI), `JHP.Asset`(JS) |
+
+> ⚠️ 솔루션 이름과 UI 프로젝트 이름이 둘 다 "JHP"입니다. `...\JHP\JHP\JHP.csproj` 경로가 정상입니다.
+
+```
+[Claude에게 붙여넣는 컨텍스트]
+- 이름: JHP
+- 종류: .NET 10.0 WinForms + WebView2 내장 브라우저
+- 목적: 메이플스토리 재획비 타이머 + OTT 시청 보조 도구
+- NuGet: Microsoft.Web.WebView2, NAudio, Octokit, System.Speech
+- GitHub: https://github.com/dlrj0/JHP (branch: test)
+- 모든 작업: Visual Studio GUI만 (터미널 사용 안 함)
+```
+
+### 프로젝트 구조
 
 ```
 JHP/ (솔루션 루트)
 ├── JHP/                 # 메인 WinForms 앱
 │   ├── Form1.cs
 │   ├── Form1.Designer.cs
+│   ├── Form1.resx
 │   ├── AlarmForm.cs
 │   ├── SiteForm.cs
 │   └── Program.cs
 ├── JHP.Api/             # 공용 유틸
 │   ├── Config.cs
-│   ├── ReSize.cs        ← 리사이즈 헬퍼 (static class)
-│   ├── Synth.cs
 │   ├── Site.cs
 │   ├── CustomAlarm.cs
+│   ├── ReSize.cs        ← 리사이즈 헬퍼 (static class)
+│   ├── Synth.cs
 │   ├── ToolStripCommand.cs
+│   ├── Prompt.cs
 │   └── UpdateChecker.cs
 ├── JHP.Controls/        # 커스텀 컨트롤
 │   ├── ControlButton.cs
-│   ├── TimerButton.cs
+│   ├── Timerbutton.cs   ← 파일명 소문자 b 주의
 │   ├── NSlider.cs
 │   ├── SiteListViewControl.cs
 │   ├── CustomCheckBox.cs
@@ -37,100 +86,64 @@ JHP/ (솔루션 루트)
 
 ---
 
-## 📎 실제 API 시그니처 (변경 없음)
+## 📋 파일별 상태 (직접 검증, 2026-06-18 기준)
 
-```csharp
-Synth.Instance.Ring(string alarmName, int volume);
-Synth.Instance.TTS(string text, int volume, int rate);
-Synth.Instance.SetVolume(int volume);
-Synth.Instance.SetRate(int rate);
-Synth.Instance.Stop();
-
-// ReSize — static class, Form1.cs에서 WM_NCHITTEST 처리에 사용
-ReSize.GetMousePosition(Form form, Point cursor);  // → ReSize.MousePosition enum
-ReSize.SetThick(ReSize.MousePosition pos);         // → Cursor
-
-// Config (싱글턴)
-Config.Instance.Volume / Rate / Tts / AlarmName
-Config.Instance.AlarmEnabled[8]   // bool[]
-Config.Instance.CustomAlarms       // CustomAlarm[3] — .Name, .Tick, .Enabled
-Config.Instance.TopMost / IsHideWindowBorderOnFocusOut / Opacity
-Config.Instance.Sites              // List<Site>
-Config.Instance.DefaultSite
-Config.Instance.Save()
-```
-# 메모
-코드 수정시 필요한 부분만 수정하고, 기존의 수정이필요없는 기능은 유지해야함.(a기능을 수정하려는데   ├── Form1.Designer.cs
-│   ├── AlarmForm.cs
-│   ├── SiteForm.cs
-│   └── Program.cs
-├── JHP.Api/             # 공용 유틸
-│   ├── Config.cs
-│   ├── ReSize.cs        ← 리사이즈 헬퍼 (static class)
-│   ├── Synth.cs
-│   ├── Site.cs
-│   ├── CustomAlarm.cs
-│   ├── ToolStripCommand.cs
-│   └── UpdateChecker.cs
-├── JHP.Controls/        # 커스텀 컨트롤
-│   ├── ControlButton.cs
-│   ├── TimerButton.cs
-│   ├── NSlider.cs
-│   ├── SiteListViewControl.cs
-│   ├── CustomCheckBox.cs
-│   └── DarkMenuRenderer.cs
-└── JHP.Asset/
-    └── UserScripts.cs
-```
+| 프로젝트 | 파일 | 상태 |
+|---------|------|------|
+| JHP.Api | `Config.cs`, `Site.cs`, `CustomAlarm.cs`, `Synth.cs`, `UpdateChecker.cs`, `Prompt.cs`, `ReSize.cs`, `ToolStripCommand.cs` | ✅ 완료, 변경 없음 |
+| JHP.Controls | `NSlider.cs`, `SiteListViewControl.cs`, `CustomCheckBox.cs`, `DarkMenuRenderer.cs` | ✅ 완료, 변경 없음 |
+| JHP.Controls | `Timerbutton.cs` | ✅ 새 코드 반영됨 |
+| JHP.Asset | `UserScripts.cs` | ✅ 완료, 변경 없음 |
+| JHP | `SiteForm.cs`, `Program.cs` | ✅ 완료, 변경 없음 (V버튼 작업 때 `SiteForm` 재사용 예정) |
+| JHP.Controls | **`ControlButton.cs`** | ❌ **적용 필요** — 아래 코드로 교체 |
+| JHP | **`Form1.Designer.cs`** | ❌ **적용 필요** — 아래 코드로 교체 |
+| JHP | **`Form1.cs`** | ❌ **적용 필요** — 아래 코드로 교체 |
+| JHP | **`AlarmForm.cs`** | ❌ **적용 필요** — 아래 코드로 교체 |
 
 ---
 
-## 📎 실제 API 시그니처 (변경 없음)
+## 🖥️ 목표 UI 레이아웃 (4개 파일 적용 시)
 
-```csharp
-Synth.Instance.Ring(string alarmName, int volume);
-Synth.Instance.TTS(string text, int volume, int rate);
-Synth.Instance.SetVolume(int volume);
-Synth.Instance.SetRate(int rate);
-Synth.Instance.Stop();
-
-// ReSize — static class, Form1.cs에서 WM_NCHITTEST 처리에 사용
-ReSize.GetMousePosition(Form form, Point cursor);  // → ReSize.MousePosition enum
-ReSize.SetThick(ReSize.MousePosition pos);         // → Cursor
-
-// Config (싱글턴)
-Config.Instance.Volume / Rate / Tts / AlarmName
-Config.Instance.AlarmEnabled[8]   // bool[]
-Config.Instance.CustomAlarms       // CustomAlarm[3] — .Name, .Tick, .Enabled
-Config.Instance.TopMost / IsHideWindowBorderOnFocusOut / Opacity
-Config.Instance.Sites              // List<Site>
-Config.Instance.DefaultSite
-Config.Instance.Save()
 ```
-# 메모
-코드 수정시 필요한 부분만 수정하고, 기존의 수정이필요없는 기능은 유지해야함.(a기능을 수정하려는데b기능이 사라지는 일이 없어야함.)
+┌──────────────────────────────────────────────────────────────────┐
+│ JHP  ⏱  볼륨 50[──────●──────]  투명도 100%[──────●──────]  [─][□][×] │
+├──────────────────────────────────────────────────────────────────┤
+│ [사이트 추가]  [항상 위]  [테두리 숨김 (포커스 아웃)]              │
+├──────────────┬───────────────────────────────────────────────────┤
+│ 사이트 목록  │                                                    │
+│ (Left 180px) │              WebView2 브라우저                     │
+│ [추가] [삭제]│                                                    │
+└──────────────┴───────────────────────────────────────────────────┘
+```
+
+### 타이머 동작 (`timerButton` 도입 후)
+- **타이틀바 시계 아이콘(`timerButton`) 좌클릭** → `ToggleTimer()` — 시작 시 모든 카운트다운 리셋, 정지 시 그대로 멈춤
+- **`timerButton` 우클릭** → `OpenAlarmSettings()` 바로 호출 (컨텍스트 메뉴 없이 직결)
+- `Active` 상태일 때 아이콘이 초록색으로 표시됨 (`Timerbutton.cs`)
+- 다음 알람 시각은 라벨이 아니라 **`toolTip.SetToolTip(timerButton, ...)`** 툴팁으로 표시
+- 앱 실행 시 자동 시작 **없음**
+
+### 볼륨/투명도 인라인 직접입력
+- `lblVolumeValue`/`lblOpacityValue` 숫자 클릭 → `tbInlineEdit`(숨김 TextBox)가 그 위치에 나타나 직접 숫자 입력 가능
+- Enter = 적용, Esc = 취소
+
+### AlarmForm (`timerButton` 우클릭 → 팝업 다이얼로그)
+- 자체 다크 타이틀바 (`FormBorderStyle.None` + 드래그 이동 + `ControlButton` 닫기)
+- 8방향 리사이즈 지원 (`WM_NCHITTEST` + `ReSize`)
+- 폭 600px, 고정 알람 8개 CheckBox (컬럼 폭 135px)
+- 알람 파일 **TextBox** (v3 가이드의 ComboBox 전환은 보류 — 아래 "선택사항 C" 참고)
+- TTS 체크박스 + 볼륨/속도 TrackBar, 커스텀 알람 3슬롯
+- 창 크기 변경 시 입력칸/버튼이 `Anchor`로 따라 늘어남
 
 ---
 
-## ✅ 현재 GitHub(test 브랜치) 실제 상태
+## ✅ 적용해야 할 4개 파일 — 전체 코드 (통째로 교체)
 
-### 완성된 파일
-| 파일 | 상태 |
-|------|------|
-| `JHP.Controls/TimerButton.cs` | ✅ 완성 — `OnHandleCreated` 포함, 좌클릭/우클릭 분리, `Active` 프로퍼티 |
-| `JHP.Api/ReSize.cs` | ✅ 완성 — 8방향 리사이즈, `RESIZE_THICK = 8` |
-| `JHP/Form1.cs` | ✅ 현재 작동 중 (단, 아래 미완료 작업 적용 전 상태) |
-| `JHP/SiteForm.cs` | ✅ 건드리지 않음 (이후 V버튼 작업 때 재사용 예정) |
+> 아래 코드는 v4가 작성한 베이스에 **v3의 버그 수정 3건(TopMost 자식창 버그, InjectJS null 체크, OnMouseMove 리사이즈 커서)과 Controls.Add 순서 수정**을 실제로 병합한 최종본입니다. v6 문서는 이 수정들이 "포함되었다"고만 설명했을 뿐 전체 코드를 남기지 않았어서, 이번에 직접 병합해서 작성했습니다.
 
-### 미완료 — 다음 세션에서 적용 필요한 파일 (4개)
+### 1. `JHP.Controls/ControlButton.cs`
 
-아래는 v5 문서에서 "완료"라고 했지만 **실제 GitHub에 반영되지 않은** 코드들입니다.
-전체 파일을 통째로 교체하면 됩니다.
-
----
-
-#### 1. `JHP.Controls/ControlButton.cs`
-**변경 내용:** `OnHandleCreated` 오버라이드 추가 (초기 렌더링 투명 배경 버그 수정, TimerButton과 동일 패턴)
+`OnHandleCreated` 오버라이드 추가 — 초기 렌더링(투명 배경) 버그 수정, `Timerbutton.cs`와 동일 패턴.
 
 ```csharp
 namespace JHP.Controls;
@@ -189,7 +202,7 @@ public class ControlButton : Button
     protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); Invalidate(); }
     protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); Invalidate(); }
 
-    // 초기 렌더링 버그 수정: 핸들 생성 직후 강제로 한 번 더 그려줌 (TimerButton.cs와 동일 패턴)
+    // 초기 렌더링 버그 수정: 핸들 생성 직후 강제로 한 번 더 그려줌 (Timerbutton.cs와 동일 패턴)
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
@@ -200,12 +213,13 @@ public class ControlButton : Button
 
 ---
 
-#### 2. `JHP/Form1.Designer.cs`
+### 2. `JHP/Form1.Designer.cs`
+
 **변경 내용:**
-- `lblNextAlarm`, `btnAlarmSettings` 제거 → `timerButton`(TimerButton 컨트롤)으로 교체
-- `sliderVolume`, `sliderOpacity` 90px → 170px 확장 + 좌표 재배치
-- 인라인 숫자 편집용 `tbInlineEdit`(TextBox, 기본 Hidden) 추가
-- `toolTip` 컴포넌트 추가
+- `lblNextAlarm`/`btnAlarmSettings` 제거 → `TimerButton timerButton`으로 교체
+- `sliderVolume`/`sliderOpacity` 90px → 170px 확장 + 좌표 재배치
+- 인라인 숫자 편집용 `tbInlineEdit`(TextBox, 기본 숨김), `toolTip` 컴포넌트 추가
+- **`Controls.Add` 순서 수정** (v4가 작성한 코드는 이 부분이 여전히 버그 있는 순서였음 — 아래는 수정된 순서)
 
 ```csharp
 using JHP.Api;
@@ -432,10 +446,13 @@ namespace JHP
             FormBorderStyle = FormBorderStyle.None;
             Text = "JHP";
 
-            Controls.Add(pnlTitleBar);
-            Controls.Add(pnlMenuBar);
-            Controls.Add(pnlSidebar);
+            // ⚠️ Dock=Top 컨트롤은 역 z-order (나중에 추가 = 최상단).
+            // webView(Fill) → pnlSidebar(Left) → pnlMenuBar(Top, 2번째) → pnlTitleBar(Top, 최상단) 순서로
+            // 반드시 마지막에 pnlTitleBar를 추가해야 메뉴바가 타이틀바를 가리지 않음.
             Controls.Add(webView);
+            Controls.Add(pnlSidebar);
+            Controls.Add(pnlMenuBar);
+            Controls.Add(pnlTitleBar);
 
             ResumeLayout(false);
         }
@@ -445,14 +462,17 @@ namespace JHP
 
 ---
 
-#### 3. `JHP/Form1.cs`
-**변경 내용:**
-- `_timerRunning` 필드 추가, `ToggleTimer()` 구현 (정지=초기화, 재시작 시 항상 리셋)
-- `timerButton.Click` → `ToggleTimer()`, `timerButton.RightClick` → `OpenAlarmSettings()`
-- `Timer_Tick`에 `if (!_timerRunning) return;` 가드 (앱 시작 시 자동 시작 안 함)
-- `UpdateNextAlarmLabel()` → `toolTip.SetToolTip(timerButton, ...)` 으로 변경
-- `BeginInlineEdit` / `CommitInlineEdit` / `InlineEdit_KeyDown` 추가 (볼륨/투명도 숫자 클릭 시 직접입력)
-- 타이틀바 드래그에서 `lblNextAlarm` 제거 → `timerButton` 위치 제외한 나머지 패널 영역으로 처리
+### 3. `JHP/Form1.cs`
+
+**변경 내용 (v4 베이스 + v3 버그 수정 병합):**
+- `_timerRunning` 필드 + `ToggleTimer()` — 좌클릭으로 시작/정지, 시작 시 항상 리셋
+- `timerButton.RightClick` → `OpenAlarmSettings()` 직접 호출 (컨텍스트 메뉴 제거)
+- `Timer_Tick`에 `if (!_timerRunning) return;` 가드 — 앱 시작 시 자동 시작 없음
+- `UpdateNextAlarmLabel()` → `toolTip.SetToolTip(timerButton, ...)`으로 변경
+- `BeginInlineEdit`/`CommitInlineEdit`/`InlineEdit_KeyDown` — 볼륨/투명도 숫자 직접입력
+- **`OpenAlarmSettings()`/`AddSite()` — `TopMost` 자식창 버그 수정** (병합)
+- **`InjectJS()` — null/`about:blank` 체크 + try/catch 추가** (병합)
+- **`OnMouseMove()` — 리사이즈 커서(↔↕) 시각 피드백 추가** (병합)
 
 ```csharp
 using JHP.Api;
@@ -497,8 +517,7 @@ public partial class Form1 : Form
         if (IsOnScreen(_config.X, _config.Y))
             Location = new Point(_config.X, _config.Y);
 
-        // 타이머는 자동 시작 안 함 — 사용자가 timerButton 클릭 시 시작
-        // (timer.Start()는 ToggleTimer() 에서만 호출)
+        // 타이머는 자동 시작 안 함 — 사용자가 timerButton 클릭 시 시작 (ToggleTimer에서만 timer.Start())
 
         await InitWV();
         CheckUpdateAsync();
@@ -528,7 +547,7 @@ public partial class Form1 : Form
         // timerButton: 좌클릭=시작/정지, 우클릭=알람설정
         timerButton.Click += (_, _) => ToggleTimer();
         timerButton.RightClick += (_, _) => OpenAlarmSettings();
-        toolTip.SetToolTip(timerButton, "다음 알람: --:--:--");
+        toolTip.SetToolTip(timerButton, "클릭하여 타이머 시작");
 
         // 볼륨
         sliderVolume.Value = Math.Clamp(_config.Volume, sliderVolume.Minimum, sliderVolume.Maximum);
@@ -662,10 +681,18 @@ public partial class Form1 : Form
         return _config.Sites.Count > 0 ? _config.Sites[0].Url : "https://www.naver.com";
     }
 
+    // 🔴 버그 수정: about:blank 또는 null Source일 때 Uri 생성 예외가 나던 부분 → null 체크 + try/catch
     private async void InjectJS()
     {
         if (webView.CoreWebView2 is null) return;
-        string host = new Uri(webView.CoreWebView2.Source).Host;
+
+        string? source = webView.CoreWebView2.Source;
+        if (string.IsNullOrWhiteSpace(source)) return;
+
+        string host;
+        try { host = new Uri(source).Host; }
+        catch { return; }
+
         try
         {
             if (host.Contains("laftel.net"))
@@ -687,7 +714,7 @@ public partial class Form1 : Form
     // ===== 알람 타이머 =====
     private void Timer_Tick(object? sender, EventArgs e)
     {
-        // 타이머 정지 상태면 Tick 무시 (이중 안전장치)
+        // 정지 상태면 Tick 무시 (이중 안전장치)
         if (!_timerRunning) return;
 
         for (int i = 0; i < 8; i++)
@@ -740,10 +767,15 @@ public partial class Form1 : Form
         toolTip.SetToolTip(timerButton, tip);
     }
 
+    // 🔴 버그 수정: TopMost=true 상태에서 ShowDialog 호출 시 자식 창이 부모 뒤에 가려지는 문제 → 임시로 false 설정
     private void OpenAlarmSettings()
     {
+        bool wasTopMost = TopMost;
+        TopMost = false;
         using var form = new AlarmForm();
-        if (form.ShowDialog(this) != DialogResult.OK) return;
+        bool ok = form.ShowDialog(this) == DialogResult.OK;
+        TopMost = wasTopMost;
+        if (!ok) return;
 
         for (int i = 0; i < 8; i++)
             if (_config.AlarmEnabled[i]) _remaining[i] = AlarmSeconds[i];
@@ -775,12 +807,18 @@ public partial class Form1 : Form
     }
 
     // ===== 사이트 목록 =====
+    // 🔴 버그 수정: OpenAlarmSettings와 동일한 TopMost 자식창 버그 수정 적용
     private void AddSite()
     {
+        bool wasTopMost = TopMost;
+        TopMost = false;
         using var form = new SiteForm();
-        if (form.ShowDialog(this) != DialogResult.OK || form.Result is not { } site) return;
-        _config.Sites.Add(site);
-        siteList.AddSite(site);
+        bool ok = form.ShowDialog(this) == DialogResult.OK && form.Result is not null;
+        TopMost = wasTopMost;
+        if (!ok) return;
+
+        _config.Sites.Add(form.Result!);
+        siteList.AddSite(form.Result!);
         _config.Save();
     }
 
@@ -889,19 +927,26 @@ public partial class Form1 : Form
             _ => HTCLIENT
         });
     }
+
+    // 🟢 추가: 창 가장자리에서 리사이즈 커서(↔↕) 시각적 피드백
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (WindowState == FormWindowState.Normal)
+            Cursor = ReSize.SetThick(ReSize.GetMousePosition(this, e.Location));
+    }
 }
 ```
 
 ---
 
-#### 4. `JHP/AlarmForm.cs`
+### 4. `JHP/AlarmForm.cs`
+
 **변경 내용:**
-- `FormBorderStyle.FixedDialog` → `FormBorderStyle.None`
-- 자체 다크 타이틀바(`_pnlTitle`) + 드래그 이동 + `ControlButton` 닫기 버튼 추가
-- `WM_NCHITTEST` + `ReSize` 패턴으로 8방향 리사이즈 지원
-- 기본 폭 420 → 600
-- 본문 컨트롤에 `Anchor` 설정 (창 늘리면 입력칸/버튼이 따라 늘어남)
-- 체크박스 컬럼 폭 94px → 135px
+- `FormBorderStyle.FixedDialog` → `FormBorderStyle.None` + 자체 타이틀바(`_pnlTitle`, 드래그 이동 + `ControlButton` 닫기)
+- `WM_NCHITTEST` 8방향 리사이즈
+- 폭 420 → 600, 체크박스 컬럼 폭 94px → 135px
+- 주요 컨트롤에 `Anchor` 설정 (창 늘리면 입력칸/버튼이 따라 늘어남)
 
 ```csharp
 using JHP.Api;
@@ -1193,34 +1238,206 @@ public class AlarmForm : Form
 
 ## ⚠️ 적용 시 주의사항
 
-- **4개 파일 모두 전체 내용을 통째로 교체** (부분 수정 아님)
-- `Form1.Designer.cs` 교체 후 Visual Studio가 자동으로 재파싱함 — Designer 뷰에서 이상하게 보여도 빌드 후 확인
-- `AlarmForm.cs`의 `btnClose.Location`은 `_pnlTitle`이 Resize될 때 Anchor로 우측 고정됨 — 초기 `_pnlTitle.Width`가 0이면 위치가 이상할 수 있으니 빌드 후 확인
-- `tbInlineEdit`은 `pnlTitleBar` 위에 겹쳐 표시되는 구조이므로, 다른 컨트롤과 z-order 충돌이 없는지 확인 (Controls.Add 순서가 중요)
+- **4개 파일 모두 전체 내용을 통째로 교체** (부분 수정 아님), 교체 후 **반드시 커밋/푸시까지 완료**
+- `Form1.Designer.cs` 좌표값은 1000px 기준 계산. `sliderOpacity` 끝(x≈600)과 `btnMinimize`(anchor right, 1000px 기준 x=862) 사이 여유는 약 260px. 최소 폭(760px)으로 줄여도 겹치지 않을 것으로 예상되나 빌드 후 실제 확인 필요
+- `AlarmForm.cs`의 `btnClose.Location`은 `new Point(_pnlTitle.Width - 46, 1)`로 계산되는데, 이 시점에 `_pnlTitle`이 아직 Form에 추가되지 않아 `Width`가 기본값(0 또는 200)일 수 있음 → `Anchor.Right` 덕분에 런타임에 보정되긴 하지만, 빌드 후 닫기 버튼이 우측 끝에 정확히 붙는지 확인 권장
+- `tbInlineEdit`은 `pnlTitleBar` 위에 겹쳐 표시되는 구조이므로 Controls.Add 순서가 중요 (위 코드에서는 이미 올바른 순서로 추가됨)
+- `AlarmForm.cs`의 `using JHP.Controls;` — `Form1.Designer.cs`에서도 이미 `JHP.Controls`를 참조하므로 프로젝트 참조 설정은 문제 없음 (확인됨)
+- `ReSize.GetMousePosition(Form form, Point cursor)`의 `cursor`는 **client 좌표**여야 함 — 위 `AlarmForm.cs`/`Form1.cs`의 `WndProc`에서는 `PointToClient(new Point(x, y))`로 이미 올바르게 변환됨 (GitHub `JHP.Api/ReSize.cs`와 직접 대조해서 검증함)
 - 빌드 오류 시 다음 세션 Claude에게 오류 메시지 전체를 붙여넣어 주세요
 
 ---
 
-## 🔜 다음 단계 작업 (아직 시작 안 함 — 사용자 승인 필요)
+## 📌 실제 API 시그니처 (GitHub 코드 직접 fetch로 검증함 — 변경 없음)
 
-위 4개 파일 적용 및 빌드 확인 후 진행하세요.
+```csharp
+// Synth.cs (싱글톤)
+Synth.Instance.Ring(string alarmName, int volume);   // 내부적으로 Path.Combine("alarm", alarmName) 상대경로 사용
+Synth.Instance.TTS(string text, int volume, int rate);
+Synth.Instance.SetVolume(int volume);
+Synth.Instance.SetRate(int rate);
+Synth.Instance.Stop();   // Stop + Dispose (NAudio WavePlayer 포함)
 
-### A. 사이트 목록 → V버튼 드롭다운 전환 (난이도: 높음)
-- `pnlSidebar`, `siteList`, `btnAddSite`, `btnRemoveSite` 제거
-- 타이틀바 좌측에 ContextMenuStrip 기반 V버튼 추가
-- 드롭다운 내용: `Config.Sites` 목록 + 구분선 + "주소 추가". 현재 사이트에 체크 표시. 항목 우클릭/× 아이콘으로 삭제.
-- 기존 `SiteForm` 재사용
+// ReSize.cs (static class — new 불가, RESIZE_THICK = 8)
+ReSize.GetMousePosition(Form form, Point cursor);   // cursor는 client 좌표 → ReSize.MousePosition enum
+ReSize.SetThick(ReSize.MousePosition pos);          // → Cursor
 
-### B. 메뉴바(`pnlMenuBar`) 제거 → V버튼 드롭다운에 흡수 (난이도: 높음)
-- `menuAddSite`는 A의 "주소 추가"와 통합
-- `menuTopmost`, `menuHideBorder`는 V버튼 드롭다운에 체크 가능 항목으로 이전
-- `pnlMenuBar`, `menuStrip` 자체를 Designer.cs에서 제거
+// UpdateChecker.cs
+await UpdateChecker.Check(string currentVersion);
+// → (bool HasUpdate, string LatestVersion, string Url)
 
-### 작업 시 주의
-- A+B를 합치면 `Form1.Designer.cs`와 `Form1.cs` 동시 대규모 수정 — **코드 작성 전 사용자에게 먼저 확인 요청**
-- 작업 완료 후 `CHANGELOG.md`에 버전 항목 추가 권장
-- V버튼 위치(lblTitle 우측 or timerButton 우측)는 사용자에게 배치 선호 먼저 확인
+// Config.cs (싱글톤, config.json에 저장)
+Config.Instance.Width / Height / X / Y / Opacity   // int, int, int, int, double
+Config.Instance.Volume      // int 0~100
+Config.Instance.Rate        // int -10~10
+Config.Instance.Tts         // bool
+Config.Instance.AlarmName   // string (mp3 파일명, 기본값 "경험치업.mp3")
+Config.Instance.AlarmEnabled // bool[8]
+Config.Instance.CustomAlarms // List<CustomAlarm> (3개)
+Config.Instance.TopMost / IsHideWindowBorderOnFocusOut / IsMaximize
+Config.Instance.Sites        // List<Site>
+Config.Instance.DefaultSite  // string
+Config.Instance.LatestUrl    // string
+Config.Instance.Save();
+Config.Instance.Replace(Config other);
+
+// Site.cs
+site.Name  // string
+site.Url   // string
+
+// CustomAlarm.cs
+alarm.Name    // string
+alarm.Tick    // int (초)
+alarm.Enabled // bool
+
+// TimerButton.cs (파일명 Timerbutton.cs, 소문자 b)
+timerButton.Active     // bool — true면 초록색 아이콘
+timerButton.Click      // 좌클릭 (Button 기본 이벤트)
+timerButton.RightClick // 우클릭 전용 이벤트 (MouseEventHandler)
+```
 
 ---
 
-*작성 기준: 2026-06-18 / GitHub test 브랜치 직접 fetch 확인*
+## ⚡ 최적화 사항
+
+| 항목 | 적용 내용 |
+|------|----------|
+| WebView2 캐시 | `AppContext.BaseDirectory/cache` 디스크 경로 지정 (메모리 캐시 누적 방지) |
+| NAudio | `Synth.Stop()`에서 `Dispose()` — 매 Ring 호출마다 리소스 해제 |
+| SpeechSynthesizer | 싱글톤 유지, `SpeakAsyncCancelAll()` 후 재사용 |
+| 타이머 간격 | 1000ms — `_timerRunning` 플래그로 동작 제어 (오버헤드 최소) |
+| 경과 시간 추적 | 카운트다운 방식: `_remaining[i]--` (tick 1회 = 1초 감소) |
+| Form 종료 시 | `Synth.Stop()` → `_config.Save()` → `webView.Dispose()` (Dispose에서) |
+
+---
+
+## 🖥️ Windows 호환성
+
+| OS | 상태 | 비고 |
+|----|------|------|
+| Windows 10 | ✅ | WebView2 런타임 별도 설치 필요 |
+| Windows 11 | ✅ | SmartScreen 경고: "추가 정보 → 실행" |
+| Windows 7 | ⚠️ | TTS 미작동 가능 — `Synth.cs`의 try-catch로 처리됨 |
+
+---
+
+## ⚠️ 알려진 버그 및 처리 현황
+
+| 버그 | 처리 상태 |
+|------|----------|
+| `TopMost=true` 상태에서 자식 창 안 보임 | 🟡 수정 코드는 위 Form1.cs에 포함됨 — **GitHub 적용 전** |
+| 창이 화면 밖으로 나가 복귀 불가 | ✅ `Form1_Load`의 `IsOnScreen()` 체크, 이미 GitHub 반영됨 |
+| `about:blank`에서 `InjectJS` Uri 예외 | 🟡 수정 코드는 위 Form1.cs에 포함됨 — **GitHub 적용 전** |
+| `Controls.Add` 순서로 레이아웃 깨짐 (메뉴바가 타이틀바 가림) | 🟡 수정 코드는 위 Form1.Designer.cs에 포함됨 — **GitHub 적용 전** |
+| 리사이즈 커서 미변경 | 🟡 `OnMouseMove` 오버라이드 코드는 위 Form1.cs에 포함됨 — **GitHub 적용 전** |
+| 초기 렌더링 시 버튼 아이콘 안 보임(호버 전까지) | 🟡 `OnHandleCreated` 코드는 위 ControlButton.cs에 포함됨 — **GitHub 적용 전** (Timerbutton.cs는 이미 적용됨) |
+| 앱 시작 시 타이머 자동 시작 | 🟡 `ToggleTimer()` 코드는 위 Form1.cs에 포함됨 — **GitHub 적용 전** |
+| AlarmForm 작은 폭(420px)·고정 다이얼로그 | 🟡 600px·리사이즈 가능 코드는 위 AlarmForm.cs에 포함됨 — **GitHub 적용 전** |
+
+---
+
+## 🔜 남은 작업 — 4개 파일 적용 + 빌드 확인 후 진행 (사용자 승인 필요)
+
+**이 작업들은 코드 작성 전에 반드시 사용자에게 "지금 진행해도 되는지" 먼저 확인하세요.**
+
+### A. 사이트 목록 → V버튼 드롭다운 전환
+- `pnlSidebar`(180px 고정), `siteList`, `btnAddSite`, `btnRemoveSite` 제거
+- 타이틀바 좌측에 V자 드롭다운 버튼 추가 (`ContextMenuStrip` 권장 — 커스텀 팝업보다 리스크 낮음)
+- 드롭다운 내용: `Config.Sites` 목록 + 구분선 + "주소 추가" 항목. 현재 사이트 체크 표시. × 아이콘으로 삭제
+- 기존 `SiteForm` 재사용
+
+### B. 메뉴바(`pnlMenuBar`) 제거 → V버튼 드롭다운에 흡수
+- `menuAddSite`는 A의 "주소 추가"와 통합
+- `menuTopmost`, `menuHideBorder`는 V버튼 드롭다운 내 체크 항목으로 이전
+- `pnlMenuBar`, `menuStrip` Designer.cs에서 제거
+- `MenuStrip_ItemClicked` 패턴 → `ContextMenuStrip ItemClicked`로 재사용 가능
+
+### C. (선택사항) AlarmForm 알람 파일명 TextBox → ComboBox
+- alarm/ 폴더 mp3 자동 목록 드롭다운으로 전환
+- 현재는 TextBox 유지. 필요 시 별도 세션에서 처리
+
+```csharp
+// 참고: ComboBox 전환 시 패턴
+private ComboBox _cmbAlarmFile = null!;
+
+private void LoadAlarmFiles()
+{
+    _cmbAlarmFile.Items.Clear();
+    string dir = Path.Combine(AppContext.BaseDirectory, "alarm");
+    if (Directory.Exists(dir))
+        foreach (var f in Directory.GetFiles(dir, "*.mp3"))
+            _cmbAlarmFile.Items.Add(Path.GetFileName(f));
+    if (_cmbAlarmFile.Items.Count == 0)
+        _cmbAlarmFile.Items.Add("(파일 없음)");
+}
+```
+
+### 작업 시 주의
+- A+B를 합치면 `Form1.Designer.cs`와 `Form1.cs`를 동시에 크게 수정
+- V버튼 위치: `lblTitle` 우측(`timerButton` 앞) 또는 `lblTitle` 자체를 V버튼으로 대체 — 사용자에게 배치 선호 먼저 물어볼 것
+- 완료 후 `CHANGELOG.md` 버전 항목 추가 권장 (현재 GitHub `CHANGELOG.md`는 `v1.0.0` 초기 릴리즈 항목만 있음)
+
+---
+
+## 📦 배포
+
+### Release 빌드 + 게시
+
+```
+VS 상단: Debug → Release
+빌드 → 솔루션 빌드 (Ctrl+Shift+B)
+
+솔루션 탐색기 → JHP 프로젝트 우클릭 → 게시
+→ 폴더 → 경로: .../JHP/output
+→ 구성: Release / 대상 런타임: win-x64 / 배포 모드: 자체 포함
+→ 게시
+```
+
+### 배포 후 폴더 구조
+
+```
+output\
+├── JHP.exe
+├── alarm\         ← mp3 파일 여기에 복사 (Synth.Ring()이 상대경로 "alarm/{name}"로 읾)
+└── cache\         ← 첫 실행 시 자동 생성 (WebView2)
+```
+
+zip 압축 → GitHub Releases 업로드
+
+---
+
+## ❓ 자주 발생하는 오류
+
+**"System.Speech를 찾을 수 없음"**
+```xml
+<!-- JHP.Api.csproj -->
+<TargetFramework>net10.0-windows</TargetFramework>
+```
+
+**WebView2 초기화 실패**
+→ https://developer.microsoft.com/ko-kr/microsoft-edge/webview2/ 런타임 설치
+
+**mp3 알람 재생 안 됨**
+→ `alarm\` 폴더가 `JHP.exe`와 같은 폴더(작업 디렉터리)에 있는지 확인 — `Synth.Ring()`은 상대경로를 사용함
+
+**GitHub 푸시 인증 오류**
+→ 파일 → 계정 설정 → GitHub → 로그아웃 후 재로그인
+
+**게시 후 exe 즉시 종료**
+→ 게시 프로필에서 배포 모드 = **자체 포함** 확인
+
+---
+
+## 🔗 참고 링크
+
+| 항목 | URL |
+|------|-----|
+| WebView2 런타임 | https://developer.microsoft.com/ko-kr/microsoft-edge/webview2/ |
+| .NET 10 Runtime | https://dotnet.microsoft.com/download/dotnet/10.0 |
+| 원본 GitHub | https://github.com/d3vdev/JHP |
+| 원본 인벤 v1 | https://www.inven.co.kr/board/maple/2304/34038 |
+| 원본 인벤 v2 | https://www.inven.co.kr/board/maple/2304/34059 |
+
+---
+
+*작성 기준: 2026-06-18 / GitHub `test` 브랜치 raw URL 직접 fetch로 4개 파일 + Config.cs/ReSize.cs/Synth.cs/Site.cs/CustomAlarm.cs/CHANGELOG.md 재검증함*
