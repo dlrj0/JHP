@@ -19,7 +19,7 @@ namespace JHP
         }
 
         private System.Windows.Forms.Timer timer;
-        private ToolTip toolTip;
+        private System.Windows.Forms.ToolTip toolTip;
 
         private Panel pnlTitleBar;
         private Label lblTitle;
@@ -51,7 +51,7 @@ namespace JHP
         {
             components = new System.ComponentModel.Container();
             timer = new System.Windows.Forms.Timer(components) { Interval = 1000 };
-            toolTip = new ToolTip(components);
+            toolTip = new System.Windows.Forms.ToolTip(components);
 
             pnlTitleBar = new Panel();
             lblTitle = new Label();
@@ -92,35 +92,36 @@ namespace JHP
             lblTitle.Location = new Point(12, 9);
             lblTitle.Text = "JHP";
 
-            // 재획비 타이머 아이콘 버튼: 좌클릭 시작/정지 토글, 우클릭 알람 설정 팝업 (Form1.cs에서 이벤트 연결)
+            // timerButton: lblNextAlarm + btnAlarmSettings 대체
+            // 좌클릭=타이머 시작/정지, 우클릭=알람설정 오픈
             timerButton.Location = new Point(54, 3);
+            timerButton.Size = new Size(30, 30);
 
             lblVolumeValue.AutoSize = true;
-            lblVolumeValue.Cursor = Cursors.Hand;
             lblVolumeValue.ForeColor = Color.LightGray;
-            lblVolumeValue.Location = new Point(110, 10);
+            lblVolumeValue.Location = new Point(100, 10);
             lblVolumeValue.Text = "볼륨 50";
+            lblVolumeValue.Cursor = Cursors.IBeam;
 
-            sliderVolume.Location = new Point(190, 11);
+            sliderVolume.Location = new Point(158, 11);
             sliderVolume.Size = new Size(170, 20);
             sliderVolume.Minimum = 0;
             sliderVolume.Maximum = 100;
 
             lblOpacityValue.AutoSize = true;
-            lblOpacityValue.Cursor = Cursors.Hand;
             lblOpacityValue.ForeColor = Color.LightGray;
-            lblOpacityValue.Location = new Point(372, 10);
+            lblOpacityValue.Location = new Point(342, 10);
             lblOpacityValue.Text = "투명도 100%";
+            lblOpacityValue.Cursor = Cursors.IBeam;
 
-            sliderOpacity.Location = new Point(472, 11);
+            sliderOpacity.Location = new Point(430, 11);
             sliderOpacity.Size = new Size(170, 20);
             sliderOpacity.Minimum = 30;
             sliderOpacity.Maximum = 100;
 
-            // 볼륨/투명도 숫자 클릭 시 직접입력용 임시 텍스트박스 (편집 중에만 보임)
+            // 인라인 직접입력 TextBox (기본 숨김, 볼륨/투명도 숫자 클릭 시 표시)
             tbInlineEdit.Visible = false;
-            tbInlineEdit.Width = 50;
-            tbInlineEdit.TextAlign = HorizontalAlignment.Center;
+            tbInlineEdit.Size = new Size(60, 20);
             tbInlineEdit.BackColor = Color.FromArgb(50, 50, 50);
             tbInlineEdit.ForeColor = Color.White;
             tbInlineEdit.BorderStyle = BorderStyle.FixedSingle;
@@ -148,7 +149,7 @@ namespace JHP
             pnlTitleBar.Controls.Add(btnMaximize);
             pnlTitleBar.Controls.Add(btnClose);
 
-            // ===== 메뉴바 ===== (이번 작업 범위 아님 — V버튼 흡수는 다음 단계에서 별도 진행)
+            // ===== 메뉴바 =====
             pnlMenuBar.Dock = DockStyle.Top;
             pnlMenuBar.Height = 28;
             pnlMenuBar.BackColor = Color.FromArgb(40, 40, 40);
@@ -174,7 +175,7 @@ namespace JHP
 
             pnlMenuBar.Controls.Add(menuStrip);
 
-            // ===== 사이드바 ===== (이번 작업 범위 아님)
+            // ===== 사이드바 =====
             pnlSidebar.Dock = DockStyle.Left;
             pnlSidebar.Width = 180;
             pnlSidebar.BackColor = Color.FromArgb(30, 30, 30);
