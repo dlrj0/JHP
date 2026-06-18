@@ -1,5 +1,6 @@
 using JHP.Api;
 using JHP.Asset;
+using JHP.Controls;
 using Microsoft.Web.WebView2.Core;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -101,17 +102,10 @@ public partial class Form1 : Form
         tbInlineEdit.KeyDown += InlineEdit_KeyDown;
         tbInlineEdit.LostFocus += (_, _) => CommitInlineEdit();
 
-        // 메뉴 (사이트 추가 / 항상 위 / 테두리 숨김)
-        menuTopmost.Checked = _config.TopMost;
-        menuHideBorder.Checked = _config.IsHideWindowBorderOnFocusOut;
+        // V버튼: 사이트 목록 + 사이트 추가 + 항상위/테두리숨김 드롭다운
+        // (구버전의 menuStrip/siteList를 대체 — 매 클릭마다 최신 _config.Sites 기준으로 새로 빌드)
         TopMost = _config.TopMost;
-        menuStrip.ItemClicked += MenuStrip_ItemClicked;
-
-        // 사이트 목록
-        siteList.SetSites(_config.Sites);
-        siteList.ItemDoubleClick += (_, _) => NavigateToSelectedSite();
-        btnAddSite.Click += (_, _) => AddSite();
-        btnRemoveSite.Click += (_, _) => RemoveSelectedSite();
+        btnMenu.Click += (_, _) => OpenSiteMenu();
 
         // 알람 타이머 초기화 (시작은 안 함)
         for (int i = 0; i < 8; i++) _remaining[i] = AlarmSeconds[i];
@@ -310,23 +304,84 @@ public partial class Form1 : Form
         UpdateNextAlarmLabel();
     }
 
-    // ===== 메뉴 명령 분기 =====
-    private void MenuStrip_ItemClicked(object? sender, ToolStripItemClickedEventArgs e)
+    // ===== V버튼 드롭다운 (사이트 목록 + 사이트 추가 + 항상위/테두리숨김) =====
+    // 매 클릭마다 _config.Sites 기준으로 새로 빌드하므로, 사이트 추가/삭제 후 별도 갱신 로직이 필요 없음.
+    private void OpenSiteMenu()
     {
-        if (e.ClickedItem?.Tag is not ToolStripCommand cmd) return;
-        switch (cmd)
+        var menu = new ContextMenuStrip
         {
-            case ToolStripCommand.ADD_SITE: AddSite(); break;
-            case ToolStripCommand.TOPMOST:
-                TopMost = menuTopmost.Checked;
-                _config.TopMost = TopMost;
+            Renderer = new SiteMenuRenderer(),
+            ShowImageMargin = false,
+            ShowCheckMargin = true,
+            BackColor = Color.FromArgb(40, 40, 40)
+        };
+
+        string currentUrl = webView.CoreWebView2?.Source ?? _config.LatestUrl;
+
+        // 모든 항목의 폭을 가장 긴 텍스트 기준으로 통일 → ✕ 아이콘이 항상 같은 위치(우측 끝)에 정렬됨
+        int textWidth = TextRenderer.MeasureText("＋ 사이트 추가", menu.Font).Width;
+        foreach (var site in _config.Sites)
+            textWidth = Math.Max(textWidth, TextRenderer.MeasureText(site.Name, menu.Font).Width);
+        textWidth = Math.Max(textWidth, TextRenderer.MeasureText("테두리 숨김 (포커스 아웃)", menu.Font).Width);
+        int itemWidth = textWidth + 70;
+
+        foreach (var site in _config.Sites)
+        {
+            var item = new SiteMenuItem(site)
+            {
+                AutoSize = false,
+                Width = itemWidth,
+                Checked = string.Equals(site.Url, currentUrl, StringComparison.OrdinalIgnoreCase)
+            };
+            item.Click += (_, _) => NavigateToSite(site);
+            item.DeleteRequested += (_, _) =>
+            {
+                _config.Sites.Remove(site);
                 _config.Save();
-                break;
-            case ToolStripCommand.TOGGLE_HIDE_WINDOW_BORDER:
-                _config.IsHideWindowBorderOnFocusOut = menuHideBorder.Checked;
-                _config.Save();
-                break;
+                menu.Items.Remove(item);
+            };
+            menu.Items.Add(item);
         }
+
+        if (_config.Sites.Count > 0)
+            menu.Items.Add(new ToolStripSeparator());
+
+        var addItem = new ToolStripMenuItem("＋ 사이트 추가") { AutoSize = false, Width = itemWidth };
+        addItem.Click += (_, _) => AddSite();
+        menu.Items.Add(addItem);
+
+        menu.Items.Add(new ToolStripSeparator());
+
+        var topmostItem = new ToolStripMenuItem("항상 위")
+        {
+            CheckOnClick = true,
+            Checked = _config.TopMost,
+            AutoSize = false,
+            Width = itemWidth
+        };
+        topmostItem.CheckedChanged += (_, _) =>
+        {
+            TopMost = topmostItem.Checked;
+            _config.TopMost = TopMost;
+            _config.Save();
+        };
+        menu.Items.Add(topmostItem);
+
+        var hideBorderItem = new ToolStripMenuItem("테두리 숨김 (포커스 아웃)")
+        {
+            CheckOnClick = true,
+            Checked = _config.IsHideWindowBorderOnFocusOut,
+            AutoSize = false,
+            Width = itemWidth
+        };
+        hideBorderItem.CheckedChanged += (_, _) =>
+        {
+            _config.IsHideWindowBorderOnFocusOut = hideBorderItem.Checked;
+            _config.Save();
+        };
+        menu.Items.Add(hideBorderItem);
+
+        menu.Show(btnMenu, new Point(0, btnMenu.Height));
     }
 
     // ===== 사이트 목록 =====
@@ -341,23 +396,60 @@ public partial class Form1 : Form
         if (!ok) return;
 
         _config.Sites.Add(form.Result!);
-        siteList.AddSite(form.Result!);
         _config.Save();
     }
 
-    private void RemoveSelectedSite()
+    private void NavigateToSite(Site site)
     {
-        int index = siteList.SelectedIndex;
-        if (index < 0) return;
-        _config.Sites.RemoveAt(index);
-        siteList.RemoveSite(index);
-        _config.Save();
-    }
-
-    private void NavigateToSelectedSite()
-    {
-        if (siteList.SelectedSite is { } site && webView.CoreWebView2 is not null)
+        if (webView.CoreWebView2 is not null)
             webView.CoreWebView2.Navigate(site.Url);
+    }
+
+    // V버튼 드롭다운 전용 사이트 항목: 일반 ToolStripMenuItem이지만 우측 끝(✕ 영역) 클릭 시
+    // 이동 대신 삭제를 수행하도록 OnMouseUp을 가로챈다. SiteMenuRenderer가 그리는 ✕ 아이콘과 짝을 이룸.
+    private sealed class SiteMenuItem : ToolStripMenuItem
+    {
+        public const int DeleteZoneWidth = 28;
+
+        public Site Site { get; }
+        public event EventHandler? DeleteRequested;
+
+        public SiteMenuItem(Site site) : base(site.Name)
+        {
+            Site = site;
+        }
+
+        protected override void OnMouseUp(MouseEventArgs mea)
+        {
+            if (mea.Button == MouseButtons.Left && mea.X >= Width - DeleteZoneWidth)
+            {
+                DeleteRequested?.Invoke(this, EventArgs.Empty);
+                return; // ✕ 영역 클릭 시 기본 Click(사이트 이동) 동작은 발생시키지 않음
+            }
+            base.OnMouseUp(mea);
+        }
+    }
+
+    // DarkMenuRenderer를 확장해 SiteMenuItem 우측에 ✕(삭제) 아이콘만 추가로 그려주는 렌더러.
+    // 다크 테마 배경/체크 표시는 DarkMenuRenderer 로직을 그대로 사용한다.
+    private sealed class SiteMenuRenderer : DarkMenuRenderer
+    {
+        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+        {
+            base.OnRenderItemText(e);
+
+            if (e.Item is not SiteMenuItem item) return;
+
+            var g = e.Graphics;
+            int cx = item.Width - SiteMenuItem.DeleteZoneWidth / 2;
+            int cy = item.Height / 2;
+            const int r = 4;
+
+            Color color = item.Selected ? Color.FromArgb(220, 90, 80) : Color.FromArgb(150, 150, 150);
+            using var pen = new Pen(color, 1.4f);
+            g.DrawLine(pen, cx - r, cy - r, cx + r, cy + r);
+            g.DrawLine(pen, cx + r, cy - r, cx - r, cy + r);
+        }
     }
 
     // ===== 타이틀바 드래그 =====
@@ -373,14 +465,12 @@ public partial class Form1 : Form
     {
         if (!_config.IsHideWindowBorderOnFocusOut) return;
         pnlTitleBar.Visible = true;
-        pnlMenuBar.Visible = true;
     }
 
     private void Form1_Deactivate(object? sender, EventArgs e)
     {
         if (!_config.IsHideWindowBorderOnFocusOut) return;
         pnlTitleBar.Visible = false;
-        pnlMenuBar.Visible = false;
     }
 
     // ===== 종료 시 설정 저장 =====
