@@ -1,27 +1,26 @@
-# JHP — 완전 통합 가이드 v5
+# JHP — 완전 통합 가이드 v6
 
 > **새 Claude 대화를 시작할 때 이 파일 하나만 붙여넣으면 됩니다.**
-> 이 문서는 `v3`(설계/버그수정 근거) + `v4`(API/구조 참조) + `진행상황_v6`(최신 작성 파일)를 통합하고,
-> **2026-06-18에 GitHub raw URL을 직접 fetch하여 실제 상태를 재검증**한 최신 버전입니다.
+> 이 문서는 `v5`에서 4개 파일(ControlButton.cs / Form1.Designer.cs / Form1.cs / AlarmForm.cs)을
+> **2026-06-18에 GitHub raw URL을 직접 fetch해서 재검증하고 코드를 작성한 후** 상태를 반영한 최신 버전입니다.
 > .NET 10.0 WinForms + WebView2 / 모든 작업 Visual Studio GUI만 사용 (터미널/CLI 없음)
 
 ---
 
-## 🚨 가장 먼저 읽으세요 — 직접 검증 결과
+## ✅ 직접 검증 결과 (2026-06-18)
 
-이전 세션들에서 "작성 완료, 적용 대기 중"이라고 보고된 4개 파일을 **방금 raw.githubusercontent.com에서 직접 fetch해서 확인**했습니다. 결과:
+이 세션에서 raw.githubusercontent.com에서 직접 fetch해서 확인 후 **4개 파일 모두 코드 작성 완료**했습니다.
 
-| 파일 | GitHub `test` 브랜치 실제 상태 |
-|------|------|
-| `JHP.Controls/Timerbutton.cs` | ✅ 새 코드 반영됨 (`OnHandleCreated`, `Active`, `RightClick` 포함) — 파일명이 `TimerButton.cs`가 아니라 **`Timerbutton.cs`**(소문자 b)임에 주의 |
-| `JHP.Controls/ControlButton.cs` | ❌ **구버전** — `OnHandleCreated` 없음 |
-| `JHP/Form1.Designer.cs` | ❌ **구버전** — `lblNextAlarm`/`btnAlarmSettings` 그대로, 슬라이더 90px, `tbInlineEdit`/`toolTip` 없음 |
-| `JHP/Form1.cs` | ❌ **구버전** — `timerButton`/`ToggleTimer` 없음, 앱 시작 시 타이머 자동 시작 |
-| `JHP/AlarmForm.cs` | ❌ **구버전** — `FormBorderStyle.FixedDialog`, 폭 420px, 체크박스 컬럼 94px |
+| 파일 | 이전 GitHub `test` 브랜치 상태 | 이 세션 처리 결과 |
+|------|------|------|
+| `JHP.Controls/Timerbutton.cs` | ✅ 이미 새 코드 반영됨 | 변경 없음 |
+| `JHP.Controls/ControlButton.cs` | ❌ 구버전 (`OnHandleCreated` 없음) | ✅ **코드 작성 완료 — GitHub 적용 필요** |
+| `JHP/Form1.Designer.cs` | ❌ 구버전 (`lblNextAlarm`/`btnAlarmSettings`, 슬라이더 90px, `tbInlineEdit`/`toolTip` 없음, Controls.Add 순서 오류) | ✅ **코드 작성 완료 — GitHub 적용 필요** |
+| `JHP/Form1.cs` | ❌ 구버전 (`timerButton`/`ToggleTimer` 없음, 앱 시작 시 타이머 자동 시작, `InjectJS` null 체크 없음) | ✅ **코드 작성 완료 — GitHub 적용 필요** |
+| `JHP/AlarmForm.cs` | ❌ 구버전 (`FormBorderStyle.FixedDialog`, 폭 420px, 체크박스 컬럼 94px, 자체 타이틀바 없음) | ✅ **코드 작성 완료 — GitHub 적용 필요** |
 
-**즉, "이전 세션에서 GitHub에 적용했다"는 보고는 이번에도 사실이 아니었습니다.** 새 코드는 여러 세션에 걸쳐 "작성"만 되었고 실제 커밋/푸시가 안 된 상태로 보입니다. 아래 ✅ 섹션의 4개 파일을 **Visual Studio에서 직접 열어 전체 내용을 교체하고 저장 → GitHub에 커밋/푸시**해야 합니다.
-
-> 📌 **다음 세션 시작 시 안내:** 이 작업을 하기 전에 항상 raw URL 4개를 다시 fetch해서 실제로 반영됐는지 먼저 확인하세요. "작성했다"≠"적용됐다"입니다.
+> 📌 **다음 세션 시작 시 안내:** 4개 파일을 Visual Studio에서 직접 열어 내용을 교체하고 커밋/푸시해야 합니다.
+> 작업 전 raw URL을 다시 fetch해서 실제로 반영됐는지 먼저 확인하세요. "작성했다"≠"적용됐다"입니다.
 
 ---
 
@@ -94,11 +93,11 @@ JHP/ (솔루션 루트)
 | JHP.Controls | `NSlider.cs`, `SiteListViewControl.cs`, `CustomCheckBox.cs`, `DarkMenuRenderer.cs` | ✅ 완료, 변경 없음 |
 | JHP.Controls | `Timerbutton.cs` | ✅ 새 코드 반영됨 |
 | JHP.Asset | `UserScripts.cs` | ✅ 완료, 변경 없음 |
-| JHP | `SiteForm.cs`, `Program.cs` | ✅ 완료, 변경 없음 (V버튼 작업 때 `SiteForm` 재사용 예정) |
-| JHP.Controls | **`ControlButton.cs`** | ❌ **적용 필요** — 아래 코드로 교체 |
-| JHP | **`Form1.Designer.cs`** | ❌ **적용 필요** — 아래 코드로 교체 |
-| JHP | **`Form1.cs`** | ❌ **적용 필요** — 아래 코드로 교체 |
-| JHP | **`AlarmForm.cs`** | ❌ **적용 필요** — 아래 코드로 교체 |
+| JHP | `SiteForm.cs`, `Program.cs` | ✅ 완료, 변경 없음 |
+| JHP.Controls | **`ControlButton.cs`** | 🟡 **코드 작성 완료 — GitHub 커밋/푸시 필요** |
+| JHP | **`Form1.Designer.cs`** | 🟡 **코드 작성 완료 — GitHub 커밋/푸시 필요** |
+| JHP | **`Form1.cs`** | 🟡 **코드 작성 완료 — GitHub 커밋/푸시 필요** |
+| JHP | **`AlarmForm.cs`** | 🟡 **코드 작성 완료 — GitHub 커밋/푸시 필요** |
 
 ---
 
@@ -1325,14 +1324,14 @@ timerButton.RightClick // 우클릭 전용 이벤트 (MouseEventHandler)
 
 | 버그 | 처리 상태 |
 |------|----------|
-| `TopMost=true` 상태에서 자식 창 안 보임 | 🟡 수정 코드는 위 Form1.cs에 포함됨 — **GitHub 적용 전** |
+| `TopMost=true` 상태에서 자식 창 안 보임 | 🟡 수정 코드 작성 완료 (Form1.cs) — **GitHub 적용 전** |
 | 창이 화면 밖으로 나가 복귀 불가 | ✅ `Form1_Load`의 `IsOnScreen()` 체크, 이미 GitHub 반영됨 |
-| `about:blank`에서 `InjectJS` Uri 예외 | 🟡 수정 코드는 위 Form1.cs에 포함됨 — **GitHub 적용 전** |
-| `Controls.Add` 순서로 레이아웃 깨짐 (메뉴바가 타이틀바 가림) | 🟡 수정 코드는 위 Form1.Designer.cs에 포함됨 — **GitHub 적용 전** |
-| 리사이즈 커서 미변경 | 🟡 `OnMouseMove` 오버라이드 코드는 위 Form1.cs에 포함됨 — **GitHub 적용 전** |
-| 초기 렌더링 시 버튼 아이콘 안 보임(호버 전까지) | 🟡 `OnHandleCreated` 코드는 위 ControlButton.cs에 포함됨 — **GitHub 적용 전** (Timerbutton.cs는 이미 적용됨) |
-| 앱 시작 시 타이머 자동 시작 | 🟡 `ToggleTimer()` 코드는 위 Form1.cs에 포함됨 — **GitHub 적용 전** |
-| AlarmForm 작은 폭(420px)·고정 다이얼로그 | 🟡 600px·리사이즈 가능 코드는 위 AlarmForm.cs에 포함됨 — **GitHub 적용 전** |
+| `about:blank`에서 `InjectJS` Uri 예외 | 🟡 수정 코드 작성 완료 (Form1.cs) — **GitHub 적용 전** |
+| `Controls.Add` 순서로 레이아웃 깨짐 (메뉴바가 타이틀바 가림) | 🟡 수정 코드 작성 완료 (Form1.Designer.cs) — **GitHub 적용 전** |
+| 리사이즈 커서 미변경 | 🟡 `OnMouseMove` 오버라이드 코드 작성 완료 (Form1.cs) — **GitHub 적용 전** |
+| 초기 렌더링 시 버튼 아이콘 안 보임(호버 전까지) | 🟡 `OnHandleCreated` 코드 작성 완료 (ControlButton.cs) — **GitHub 적용 전** (Timerbutton.cs는 이미 적용됨) |
+| 앱 시작 시 타이머 자동 시작 | 🟡 `ToggleTimer()` 코드 작성 완료 (Form1.cs) — **GitHub 적용 전** |
+| AlarmForm 작은 폭(420px)·고정 다이얼로그 | 🟡 600px·리사이즈 가능 코드 작성 완료 (AlarmForm.cs) — **GitHub 적용 전** |
 
 ---
 
@@ -1440,4 +1439,4 @@ zip 압축 → GitHub Releases 업로드
 
 ---
 
-*작성 기준: 2026-06-18 / GitHub `test` 브랜치 raw URL 직접 fetch로 4개 파일 + Config.cs/ReSize.cs/Synth.cs/Site.cs/CustomAlarm.cs/CHANGELOG.md 재검증함*
+*작성 기준: 2026-06-18 / GitHub `test` 브랜치 raw URL 직접 fetch로 4개 파일 + Config.cs/ReSize.cs/Synth.cs/Site.cs/CustomAlarm.cs/CHANGELOG.md 재검증 후 코드 작성 완료 — Visual Studio에서 교체 및 커밋/푸시 대기 중*
