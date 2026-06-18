@@ -19,7 +19,6 @@ namespace JHP
         }
 
         private System.Windows.Forms.Timer timer;
-        private System.Windows.Forms.ToolTip toolTip;
 
         private Panel pnlTitleBar;
         private Label lblTitle;
@@ -29,6 +28,7 @@ namespace JHP
         private NSlider sliderVolume;
         private NSlider sliderOpacity;
         private TextBox tbInlineEdit;
+        private ToolTip toolTip;
         private ControlButton btnMinimize;
         private ControlButton btnMaximize;
         private ControlButton btnClose;
@@ -51,7 +51,7 @@ namespace JHP
         {
             components = new System.ComponentModel.Container();
             timer = new System.Windows.Forms.Timer(components) { Interval = 1000 };
-            toolTip = new System.Windows.Forms.ToolTip(components);
+            toolTip = new ToolTip(components) { AutoPopDelay = 10000, InitialDelay = 300, ReshowDelay = 100 };
 
             pnlTitleBar = new Panel();
             lblTitle = new Label();
@@ -92,39 +92,39 @@ namespace JHP
             lblTitle.Location = new Point(12, 9);
             lblTitle.Text = "JHP";
 
-            // timerButton: lblNextAlarm + btnAlarmSettings 대체
-            // 좌클릭=타이머 시작/정지, 우클릭=알람설정 오픈
+            // 타이머 아이콘 버튼 — 좌클릭: 시작/정지 토글, 우클릭: 알람설정 팝업
             timerButton.Location = new Point(54, 3);
             timerButton.Size = new Size(30, 30);
 
             lblVolumeValue.AutoSize = true;
             lblVolumeValue.ForeColor = Color.LightGray;
-            lblVolumeValue.Location = new Point(100, 10);
+            lblVolumeValue.Location = new Point(94, 10);
             lblVolumeValue.Text = "볼륨 50";
-            lblVolumeValue.Cursor = Cursors.IBeam;
+            lblVolumeValue.Cursor = Cursors.Hand;
 
-            sliderVolume.Location = new Point(158, 11);
+            sliderVolume.Location = new Point(158, 8);
             sliderVolume.Size = new Size(170, 20);
             sliderVolume.Minimum = 0;
             sliderVolume.Maximum = 100;
 
             lblOpacityValue.AutoSize = true;
             lblOpacityValue.ForeColor = Color.LightGray;
-            lblOpacityValue.Location = new Point(342, 10);
+            lblOpacityValue.Location = new Point(338, 10);
             lblOpacityValue.Text = "투명도 100%";
-            lblOpacityValue.Cursor = Cursors.IBeam;
+            lblOpacityValue.Cursor = Cursors.Hand;
 
-            sliderOpacity.Location = new Point(430, 11);
+            sliderOpacity.Location = new Point(420, 8);
             sliderOpacity.Size = new Size(170, 20);
             sliderOpacity.Minimum = 30;
             sliderOpacity.Maximum = 100;
 
-            // 인라인 직접입력 TextBox (기본 숨김, 볼륨/투명도 숫자 클릭 시 표시)
-            tbInlineEdit.Visible = false;
-            tbInlineEdit.Size = new Size(60, 20);
+            // 숫자 직접입력 텍스트박스 (기본 숨김 — BeginInlineEdit에서 표시)
             tbInlineEdit.BackColor = Color.FromArgb(50, 50, 50);
             tbInlineEdit.ForeColor = Color.White;
             tbInlineEdit.BorderStyle = BorderStyle.FixedSingle;
+            tbInlineEdit.Location = new Point(94, 9);
+            tbInlineEdit.Size = new Size(58, 20);
+            tbInlineEdit.Visible = false;
 
             btnMinimize.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnMinimize.Location = new Point(862, 3);
@@ -144,10 +144,10 @@ namespace JHP
             pnlTitleBar.Controls.Add(sliderVolume);
             pnlTitleBar.Controls.Add(lblOpacityValue);
             pnlTitleBar.Controls.Add(sliderOpacity);
-            pnlTitleBar.Controls.Add(tbInlineEdit);
             pnlTitleBar.Controls.Add(btnMinimize);
             pnlTitleBar.Controls.Add(btnMaximize);
             pnlTitleBar.Controls.Add(btnClose);
+            pnlTitleBar.Controls.Add(tbInlineEdit); // 마지막(최상단 z-order) — 다른 컨트롤 위에 올라와야 함
 
             // ===== 메뉴바 =====
             pnlMenuBar.Dock = DockStyle.Top;
@@ -222,10 +222,11 @@ namespace JHP
             FormBorderStyle = FormBorderStyle.None;
             Text = "JHP";
 
-            Controls.Add(pnlTitleBar);
-            Controls.Add(pnlMenuBar);
-            Controls.Add(pnlSidebar);
+            // Dock=Top은 역 z-order (나중 추가 = 최상단) → pnlTitleBar 마지막 추가
             Controls.Add(webView);
+            Controls.Add(pnlSidebar);
+            Controls.Add(pnlMenuBar);
+            Controls.Add(pnlTitleBar);
 
             ResumeLayout(false);
         }
