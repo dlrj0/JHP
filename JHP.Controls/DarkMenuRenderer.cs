@@ -23,6 +23,21 @@ public class DarkMenuRenderer : ToolStripProfessionalRenderer
         base.OnRenderItemText(e);
     }
 
+    // 기본 렌더러는 체크 상자를 밝은 색(노랑/주황)으로 그려 어두운 메뉴에서 튄다 → 흰색 ✓만 직접 그린다.
+    protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs e)
+    {
+        var r = e.ImageRectangle;
+        float s = e.Item.Owner is { } owner ? owner.DeviceDpi / 96f : 1f;
+        using var bg = new SolidBrush(Color.FromArgb(60, 60, 60));
+        e.Graphics.FillRectangle(bg, r);
+        using var pen = new Pen(Color.White, 1.6f * s);
+        var old = e.Graphics.SmoothingMode;
+        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        float cx = r.X + r.Width / 2f, cy = r.Y + r.Height / 2f, u = r.Height / 6f;
+        e.Graphics.DrawLines(pen, [new PointF(cx - 2.2f * u, cy), new PointF(cx - 0.6f * u, cy + 1.6f * u), new PointF(cx + 2.4f * u, cy - 1.8f * u)]);
+        e.Graphics.SmoothingMode = old;
+    }
+
     protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
     {
         // 메뉴바 기본 테두리 제거 (다크테마와 어울리지 않는 밝은 외곽선 숨김)
@@ -44,6 +59,11 @@ public class DarkMenuRenderer : ToolStripProfessionalRenderer
         public override Color MenuItemPressedGradientBegin => Color.FromArgb(55, 90, 145);
         public override Color MenuItemPressedGradientEnd => Color.FromArgb(55, 90, 145);
         public override Color MenuBorder => Color.FromArgb(40, 40, 40);
+        public override Color CheckBackground => Color.FromArgb(60, 60, 60);
+        public override Color CheckSelectedBackground => Color.FromArgb(60, 60, 60);
+        public override Color CheckPressedBackground => Color.FromArgb(60, 60, 60);
+        public override Color SeparatorDark => Color.FromArgb(55, 55, 55);
+        public override Color SeparatorLight => Color.FromArgb(55, 55, 55);
         public override Color MenuStripGradientBegin => Color.FromArgb(40, 40, 40);
         public override Color MenuStripGradientEnd => Color.FromArgb(40, 40, 40);
         public override Color ToolStripDropDownBackground => Color.FromArgb(40, 40, 40);

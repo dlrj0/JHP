@@ -22,14 +22,24 @@ public partial class Form1 : Form
 
     // 인라인 편집 대상 추적 ("volume" | "opacity")
     private string? _inlineEditTarget;
+    private int _inlineEditOriginal; // Esc로 취소할 때 되돌릴 값
+
+    private long _lastTickMs;                                  // 마지막으로 반영한 시각(Environment.TickCount64)
+    private FormWindowState _lastNonMinimizedState = FormWindowState.Normal;
+    private int _modalDepth;                                   // 모달 대화상자가 떠 있는 동안 타이틀바 숨김을 막는다
+    private string? _lastTip;
+    private bool[]? _alarmEnabledSnapshot;                     // 알람 설정창을 열 때의 값 (확인 시 바뀐 항목만 리셋)
+    private (bool Enabled, int Tick)[]? _customSnapshot;
 
     public Form1()
     {
         InitializeComponent();
+        Icon = Program.AppIcon ?? Icon; // 작업 표시줄/Alt+Tab 아이콘 (Form 기본 아이콘 대신 exe에 포함된 앱 아이콘)
         Load += Form1_Load;
         FormClosing += Form1_FormClosing;
         Activated += Form1_Activated;
         Deactivate += Form1_Deactivate;
+        SizeChanged += (_, _) => OnWindowStateChanged();
     }
 
     private async void Form1_Load(object? sender, EventArgs e)
@@ -46,25 +56,54 @@ public partial class Form1 : Form
             Size = new Size(w, h);
         }
 
-        if (IsOnScreen(_config.X, _config.Y))
+        if (IsOnScreen(new Rectangle(_config.X, _config.Y, Width, Height)))
             Location = new Point(_config.X, _config.Y);
 
         LayoutTitleBar();
+
+        // 최대화 복원은 웹뷰 초기화 전에 해서, 일반 크기로 떴다가 커지는 깜빡임을 줄인다.
+        if (_config.IsMaximize)
+        {
+            UpdateMaximizedBounds();
+            WindowState = FormWindowState.Maximized;
+        }
 
         // 타이머는 자동 시작 안 함 — 사용자가 timerButton 클릭 시 시작 (ToggleTimer에서만 timer.Start())
 
         await InitWV();
         CheckUpdateAsync();
-
-        if (_config.IsMaximize)
-            WindowState = FormWindowState.Maximized;
     }
 
-    private static bool IsOnScreen(int x, int y)
+    // 창의 타이틀바 쪽(위 40px)이 어느 화면의 작업 영역과 충분히(가로 100px 이상) 겹치는지 확인한다.
+    // 모니터를 분리했거나 해상도가 바뀌어 창이 화면 밖에 있으면 기본 위치를 쓰게 한다.
+    private static bool IsOnScreen(Rectangle bounds)
     {
+        var strip = new Rectangle(bounds.X, bounds.Y, Math.Max(bounds.Width, 1), 40);
         foreach (Screen screen in Screen.AllScreens)
-            if (screen.WorkingArea.Contains(x, y)) return true;
+        {
+            var hit = Rectangle.Intersect(screen.WorkingArea, strip);
+            if (hit.Width >= 100 && hit.Height >= 20) return true;
+        }
         return false;
+    }
+
+    // FormBorderStyle.None 창은 최대화하면 작업 표시줄까지 덮으므로, 최대화 영역을 작업 영역으로 제한한다.
+    private void UpdateMaximizedBounds()
+    {
+        var screen = Screen.FromControl(this);
+        var wa = screen.WorkingArea;
+        MaximizedBounds = new Rectangle(wa.X - screen.Bounds.X, wa.Y - screen.Bounds.Y, wa.Width, wa.Height);
+    }
+
+    private void OnWindowStateChanged()
+    {
+        if (WindowState != FormWindowState.Minimized) _lastNonMinimizedState = WindowState;
+
+        bool normal = WindowState == FormWindowState.Normal;
+        pnlResizeLeft.Visible = pnlResizeRight.Visible = pnlResizeBottom.Visible = normal; // 최대화 중엔 리사이즈 핸들 없음
+        btnMaximize.Type = WindowState == FormWindowState.Maximized
+            ? ControlButton.ButtonType.Restore
+            : ControlButton.ButtonType.Maximize;
     }
 
     private void InitControls()
@@ -87,13 +126,24 @@ public partial class Form1 : Form
 
         btnMinimize.Click += (_, _) => WindowState = FormWindowState.Minimized;
         btnMaximize.Click += (_, _) =>
+        {
+            UpdateMaximizedBounds();
             WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
+        };
         btnClose.Click += (_, _) => Close();
 
         // timerButton: 좌클릭=시작/정지, 우클릭=알람설정
         timerButton.Click += (_, _) => ToggleTimer();
         timerButton.RightClick += (_, _) => OpenAlarmSettings();
-        toolTip.SetToolTip(timerButton, "클릭하여 타이머 시작");
+        SetTimerTip("클릭하여 타이머 시작\n우클릭: 알람 설정");
+        toolTip.SetToolTip(btnMenu, "사이트 목록 / 설정");
+        toolTip.SetToolTip(btnMinimize, "최소화");
+        toolTip.SetToolTip(btnMaximize, "최대화 / 이전 크기");
+        toolTip.SetToolTip(btnClose, "닫기");
+        toolTip.SetToolTip(sliderVolume, "볼륨");
+        toolTip.SetToolTip(sliderOpacity, "투명도");
+        toolTip.SetToolTip(lblVolumeValue, "클릭하여 숫자로 입력");
+        toolTip.SetToolTip(lblOpacityValue, "클릭하여 숫자로 입력");
 
         // 볼륨
         sliderVolume.Value = Math.Clamp(_config.Volume, sliderVolume.Minimum, sliderVolume.Maximum);
@@ -103,7 +153,7 @@ public partial class Form1 : Form
             lblVolumeValue.Text = $"볼륨 {sliderVolume.Value}";
             _config.Volume = sliderVolume.Value;
             Synth.Instance.SetVolume(sliderVolume.Value);
-            _config.Save();
+            ScheduleSave();
         };
         lblVolumeValue.Click += (_, _) => BeginInlineEdit("volume");
 
@@ -116,12 +166,15 @@ public partial class Form1 : Form
             lblOpacityValue.Text = $"투명도 {sliderOpacity.Value}%";
             Opacity = sliderOpacity.Value / 100.0;
             _config.Opacity = Opacity;
-            _config.Save();
+            ScheduleSave();
         };
         lblOpacityValue.Click += (_, _) => BeginInlineEdit("opacity");
 
         // 인라인 편집 TextBox
         tbInlineEdit.KeyDown += InlineEdit_KeyDown;
+        tbInlineEdit.MaxLength = 3;
+        tbInlineEdit.KeyPress += (_, e) => e.Handled = !char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar); // 숫자만 입력
+        tbInlineEdit.TextChanged += (_, _) => ApplyInlineEditLive();
         tbInlineEdit.LostFocus += (_, _) => CommitInlineEdit();
 
         // V버튼: 사이트 목록 + 사이트 추가 + 항상위/테두리숨김 드롭다운
@@ -137,6 +190,20 @@ public partial class Form1 : Form
         timer.Tick += Timer_Tick;
     }
 
+    // 슬라이더를 끄는 동안 매 값마다 파일을 쓰지 않도록 마지막 변경 후 0.4초 뒤 한 번만 저장한다 (종료 시에는 별도로 저장).
+    private System.Windows.Forms.Timer? _saveDebounce;
+
+    private void ScheduleSave()
+    {
+        if (_saveDebounce is null)
+        {
+            _saveDebounce = new System.Windows.Forms.Timer { Interval = 400 };
+            _saveDebounce.Tick += (_, _) => { _saveDebounce.Stop(); _config.Save(); };
+        }
+        _saveDebounce.Stop();
+        _saveDebounce.Start();
+    }
+
     // ===== 타이머 시작/정지 토글 =====
     private void ToggleTimer()
     {
@@ -147,6 +214,7 @@ public partial class Form1 : Form
             // 시작 시 항상 리셋
             for (int i = 0; i < 8; i++) _remaining[i] = AlarmSeconds[i];
             for (int i = 0; i < 3; i++) _customRemaining[i] = _config.CustomAlarms[i].Tick;
+            _lastTickMs = Environment.TickCount64;
             timer.Start();
         }
         else
@@ -165,32 +233,55 @@ public partial class Form1 : Form
         int value = target == "volume" ? sliderVolume.Value : sliderOpacity.Value;
         Label lbl = target == "volume" ? lblVolumeValue : lblOpacityValue;
 
+        _inlineEditOriginal = value;
         tbInlineEdit.Text = value.ToString();
-        tbInlineEdit.Location = new Point(lbl.Left, lbl.Top - 1);
+        tbInlineEdit.Location = new Point(lbl.Left, (pnlTitleBar.Height - tbInlineEdit.Height) / 2);
         tbInlineEdit.Visible = true;
         tbInlineEdit.Focus();
         tbInlineEdit.SelectAll();
     }
 
+    // 입력 도중에도 유효 범위의 값이면 즉시 반영한다(범위를 벗어나거나 입력 중간 상태는 확정 시 보정).
+    // 예: 투명도 최소 30이므로 "5"를 치는 순간 30%로 튀지 않고, "50"까지 입력해야 반영된다.
+    private void ApplyInlineEditLive()
+    {
+        if (_inlineEditTarget is null || !tbInlineEdit.Visible) return;
+        if (!int.TryParse(tbInlineEdit.Text, out int val)) return;
+
+        NSlider slider = _inlineEditTarget == "volume" ? sliderVolume : sliderOpacity;
+        if (val < slider.Minimum || val > slider.Maximum) return;
+        slider.Value = val;
+    }
+
     private void CommitInlineEdit()
     {
+        if (_inlineEditTarget is null) { tbInlineEdit.Visible = false; return; }
+
+        string target = _inlineEditTarget;
+        _inlineEditTarget = null; // Visible=false로 LostFocus가 다시 들어와도 중복 처리되지 않게 먼저 비운다
         tbInlineEdit.Visible = false;
-        if (_inlineEditTarget is null) return;
 
         if (!int.TryParse(tbInlineEdit.Text, out int val)) return;
 
-        if (_inlineEditTarget == "volume")
+        if (target == "volume")
             sliderVolume.Value = Math.Clamp(val, sliderVolume.Minimum, sliderVolume.Maximum);
         else
             sliderOpacity.Value = Math.Clamp(val, sliderOpacity.Minimum, sliderOpacity.Maximum);
-
-        _inlineEditTarget = null;
     }
 
     private void InlineEdit_KeyDown(object? sender, KeyEventArgs e)
     {
         if (e.KeyCode == Keys.Enter) { CommitInlineEdit(); e.SuppressKeyPress = true; }
-        else if (e.KeyCode == Keys.Escape) { tbInlineEdit.Visible = false; _inlineEditTarget = null; }
+        else if (e.KeyCode == Keys.Escape)
+        {
+            // 입력 중 이미 슬라이더에 반영됐으므로 원래 값으로 되돌린다
+            string? target = _inlineEditTarget;
+            _inlineEditTarget = null;
+            tbInlineEdit.Visible = false;
+            if (target == "volume") sliderVolume.Value = _inlineEditOriginal;
+            else if (target == "opacity") sliderOpacity.Value = _inlineEditOriginal;
+            e.SuppressKeyPress = true;
+        }
     }
 
     // ===== WebView2 =====
@@ -202,7 +293,13 @@ public partial class Form1 : Form
             var env = await CoreWebView2Environment.CreateAsync(userDataFolder: cacheDir);
             await webView.EnsureCoreWebView2Async(env);
 
-            webView.CoreWebView2.NavigationCompleted += (_, _) => InjectJS();
+            webView.CoreWebView2.NavigationCompleted += (_, e) => { if (e.IsSuccess) InjectJS(); };
+            // 렌더러 프로세스가 죽으면 빈 화면으로 남으므로 새로고침한다
+            webView.CoreWebView2.ProcessFailed += (_, e) =>
+            {
+                if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.RenderProcessExited)
+                    BeginInvoke(() => webView.CoreWebView2?.Reload());
+            };
             webView.CoreWebView2.Navigate(ResolveStartUrl());
         }
         catch (Exception ex)
@@ -214,10 +311,13 @@ public partial class Form1 : Form
 
     private string ResolveStartUrl()
     {
-        if (!string.IsNullOrWhiteSpace(_config.LatestUrl)) return _config.LatestUrl;
+        // 손상/수동 편집된 주소로 시작하다 예외가 나지 않도록 http(s) 주소만 사용한다
+        if (JHP.Api.Site.TryNormalizeUrl(_config.LatestUrl, out string latest)) return latest;
         var defaultSite = _config.Sites.FirstOrDefault(s => s.Name == _config.DefaultSite);
-        if (defaultSite is not null) return defaultSite.Url;
-        return _config.Sites.Count > 0 ? _config.Sites[0].Url : "https://www.naver.com";
+        if (defaultSite is not null && JHP.Api.Site.TryNormalizeUrl(defaultSite.Url, out string def)) return def;
+        foreach (var site in _config.Sites)
+            if (JHP.Api.Site.TryNormalizeUrl(site.Url, out string first)) return first;
+        return "https://www.naver.com";
     }
 
     // 🔴 버그 수정: about:blank 또는 null Source일 때 Uri 생성 예외가 나던 부분 → null 체크 + try/catch
@@ -234,20 +334,29 @@ public partial class Form1 : Form
 
         try
         {
-            if (host.Contains("laftel.net"))
+            if (HostIs(host, "laftel.net"))
                 await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.LaftelSkipNext);
-            else if (host.Contains("netflix.com"))
+            else if (HostIs(host, "netflix.com"))
                 await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.NetflixSkipNext);
         }
         catch { }
     }
 
+    // "evil-netflix.com", "netflix.com.example" 같은 주소와 구분하기 위해 정확히 같거나 하위 도메인인 경우만 일치시킨다
+    private static bool HostIs(string host, string domain) =>
+        host.Equals(domain, StringComparison.OrdinalIgnoreCase) ||
+        host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase);
+
     private async void CheckUpdateAsync()
     {
-        var (hasUpdate, latest, url) = await UpdateChecker.Check(CurrentVersion);
-        if (!hasUpdate) return;
-        if (Prompt.ShowDialog("업데이트 알림", $"새 버전 {latest}이 있습니다. 다운로드 페이지를 여시겠습니까?"))
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        try
+        {
+            var (hasUpdate, latest, url) = await UpdateChecker.Check(CurrentVersion);
+            if (!hasUpdate || string.IsNullOrWhiteSpace(url)) return;
+            if (Prompt.ShowDialog("업데이트 알림", $"새 버전 {latest}이 있습니다. 다운로드 페이지를 여시겠습니까?", this))
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch { } // 업데이트 확인 실패가 앱 동작에 영향을 주지 않도록 한다
     }
 
     // ===== 알람 타이머 =====
@@ -256,25 +365,35 @@ public partial class Form1 : Form
         // 정지 상태면 Tick 무시 (이중 안전장치)
         if (!_timerRunning) return;
 
+        // WinForms 타이머는 UI가 바쁠 때(창 드래그, 모달 대화상자) Tick이 밀리거나 합쳐지므로,
+        // Tick 횟수가 아니라 실제 경과 시간(초)만큼 남은 시간을 줄인다. 타이머는 250ms 주기로 돌며 1초 미만 나머지는 이월한다.
+        long now = Environment.TickCount64;
+        int steps = (int)((now - _lastTickMs) / 1000);
+        if (steps < 1) return;
+        _lastTickMs += steps * 1000L;
+
         // 같은 순간에 여러 알람이 겹치면(예: 2시간 시점에 1시간/30분/... 동시 도달) 목록 위쪽 하나만 울린다.
         // 모든 알람의 남은 시간은 각자 정상적으로 갱신/리셋한다.
         string? toFire = null;
 
-        for (int i = 0; i < 8; i++)
+        for (int step = 0; step < steps; step++)
         {
-            if (!_config.AlarmEnabled[i]) continue;
-            if (--_remaining[i] > 0) continue;
-            _remaining[i] = AlarmSeconds[i];
-            toFire ??= AlarmNames[i];
-        }
+            for (int i = 0; i < 8; i++)
+            {
+                if (!_config.AlarmEnabled[i]) continue;
+                if (--_remaining[i] > 0) continue;
+                _remaining[i] = AlarmSeconds[i];
+                toFire ??= AlarmNames[i];
+            }
 
-        for (int i = 0; i < 3; i++)
-        {
-            var alarm = _config.CustomAlarms[i];
-            if (!alarm.Enabled || alarm.Tick <= 0) continue;
-            if (--_customRemaining[i] > 0) continue;
-            _customRemaining[i] = alarm.Tick;
-            toFire ??= string.IsNullOrWhiteSpace(alarm.Name) ? "커스텀 알람" : alarm.Name;
+            for (int i = 0; i < 3; i++)
+            {
+                var alarm = _config.CustomAlarms[i];
+                if (!alarm.Enabled || alarm.Tick <= 0) continue;
+                if (--_customRemaining[i] > 0) continue;
+                _customRemaining[i] = alarm.Tick;
+                toFire ??= string.IsNullOrWhiteSpace(alarm.Name) ? "커스텀 알람" : alarm.Name;
+            }
         }
 
         if (toFire is not null) FireAlarm(toFire);
@@ -294,7 +413,7 @@ public partial class Form1 : Form
     {
         if (!_timerRunning)
         {
-            toolTip.SetToolTip(timerButton, "클릭하여 타이머 시작");
+            SetTimerTip("클릭하여 타이머 시작\n우클릭: 알람 설정");
             return;
         }
 
@@ -309,7 +428,15 @@ public partial class Form1 : Form
         string tip = min is null
             ? "다음 알람: --:--:--"
             : $"다음 알람: {TimeSpan.FromSeconds(min.Value):hh\\:mm\\:ss}";
-        toolTip.SetToolTip(timerButton, tip);
+        SetTimerTip(tip + "\n클릭: 정지 / 우클릭: 알람 설정");
+    }
+
+    // 내용이 바뀔 때만 툴팁을 갱신한다 (매초 재설정하면 표시 중인 툴팁이 깜빡일 수 있음)
+    private void SetTimerTip(string text)
+    {
+        if (_lastTip == text) return;
+        _lastTip = text;
+        toolTip.SetToolTip(timerButton, text);
     }
 
     // 🔴 버그 수정: TopMost=true 상태에서 ShowDialog 호출 시 자식 창이 부모 뒤에 가려지는 문제 → 임시로 false 설정
@@ -324,6 +451,9 @@ public partial class Form1 : Form
             _alarmForm.Close();
             return;
         }
+
+        _alarmEnabledSnapshot = (bool[])_config.AlarmEnabled.Clone();
+        _customSnapshot = _config.CustomAlarms.Select(c => (c.Enabled, c.Tick)).ToArray();
 
         var form = _alarmForm = new AlarmForm();
         form.FormClosed += (_, _) =>
@@ -340,10 +470,18 @@ public partial class Form1 : Form
 
     private void ApplyAlarmSettings()
     {
+        // 확인만 눌러도 진행 중인 알람이 처음부터 다시 세어지지 않도록, 설정창을 열 때와 달라진 항목만 리셋한다.
         for (int i = 0; i < 8; i++)
-            if (_config.AlarmEnabled[i]) _remaining[i] = AlarmSeconds[i];
+        {
+            bool changed = _alarmEnabledSnapshot is null || _alarmEnabledSnapshot[i] != _config.AlarmEnabled[i];
+            if (_config.AlarmEnabled[i] && changed) _remaining[i] = AlarmSeconds[i];
+        }
         for (int i = 0; i < 3; i++)
-            if (_config.CustomAlarms[i].Enabled) _customRemaining[i] = _config.CustomAlarms[i].Tick;
+        {
+            var c = _config.CustomAlarms[i];
+            bool changed = _customSnapshot is null || _customSnapshot[i] != (c.Enabled, c.Tick);
+            if (c.Enabled && changed) _customRemaining[i] = c.Tick;
+        }
 
         sliderVolume.Value = Math.Clamp(_config.Volume, sliderVolume.Minimum, sliderVolume.Maximum);
         lblVolumeValue.Text = $"볼륨 {sliderVolume.Value}";
@@ -412,7 +550,7 @@ public partial class Form1 : Form
             {
                 AutoSize = false,
                 Size = new Size(itemWidth, itemHeight),
-                Checked = string.Equals(site.Url, currentUrl, StringComparison.OrdinalIgnoreCase)
+                Checked = JHP.Api.Site.SameUrl(site.Url, currentUrl)
             };
             item.Click += (_, _) => NavigateToSite(site);
             item.DeleteRequested += (_, _) =>
@@ -430,6 +568,7 @@ public partial class Form1 : Form
         addItem.Click += (_, _) => AddSite();
         menu.Items.Add(addItem);
 
+        menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
         menu.Show(btnMenu, new Point(0, btnMenu.Height));
     }
 
@@ -439,10 +578,21 @@ public partial class Form1 : Form
     {
         bool wasTopMost = TopMost;
         TopMost = false;
-        using var form = new SiteForm();
-        bool ok = form.ShowDialog(this) == DialogResult.OK && form.Result is not null;
-        TopMost = wasTopMost;
-        if (!ok) return;
+        _modalDepth++;
+        bool ok;
+        SiteForm? form = null;
+        try
+        {
+            form = new SiteForm();
+            ok = form.ShowDialog(this) == DialogResult.OK && form.Result is not null;
+        }
+        finally
+        {
+            _modalDepth--;
+            TopMost = wasTopMost;
+        }
+        if (!ok || form is null) return;
+        form.Dispose();
 
         _config.Sites.Add(form.Result!);
         _config.Save();
@@ -450,8 +600,15 @@ public partial class Form1 : Form
 
     private void NavigateToSite(Site site)
     {
-        if (webView.CoreWebView2 is not null)
-            webView.CoreWebView2.Navigate(site.Url);
+        if (webView.CoreWebView2 is null) return;
+        if (!JHP.Api.Site.TryNormalizeUrl(site.Url, out string url))
+        {
+            MessageBox.Show(this, $"'{site.Name}'의 주소가 올바르지 않습니다.\n{site.Url}", "JHP",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        try { webView.CoreWebView2.Navigate(url); }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "JHP", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
     }
 
     // V버튼 드롭다운 전용 사이트 항목: 일반 ToolStripMenuItem이지만 우측 끝(✕ 영역) 클릭 시
@@ -492,10 +649,11 @@ public partial class Form1 : Form
             var g = e.Graphics;
             int cx = item.Width - SiteMenuItem.DeleteZoneWidth / 2;
             int cy = item.Height / 2;
-            const int r = 4;
+            float scale = (item.Owner?.DeviceDpi ?? 96) / 96f;
+            int r = (int)Math.Round(4 * scale);
 
             Color color = item.Selected ? Color.FromArgb(220, 90, 80) : Color.FromArgb(150, 150, 150);
-            using var pen = new Pen(color, 1.4f);
+            using var pen = new Pen(color, 1.4f * scale);
             g.DrawLine(pen, cx - r, cy - r, cx + r, cy + r);
             g.DrawLine(pen, cx + r, cy - r, cx - r, cy + r);
         }
@@ -579,7 +737,7 @@ public partial class Form1 : Form
         // 모든 px 값은 96dpi 기준 → 현재 DPI 배율(s)을 곱해 사용
         float s = DeviceDpi / 96f;
         int Px(int v) => (int)Math.Round(v * s);
-        int gap = Px(8), groupGap = Px(16), rightPad = Px(12), minSlider = Px(60), maxSlider = Px(170);
+        int gap = Px(8), groupGap = Px(16), rightPad = Px(12), minSlider = Px(60), maxSlider = Px(110); // 슬라이더를 너무 길게 두지 않아 타이틀바에 창을 잡고 끌 수 있는 빈 영역을 확보
         int h = pnlTitleBar.Height;
 
         // 우측 창 버튼: 오른쪽 끝에서부터 닫기 → 최대화 → 최소화 순으로 배치 (세로 가운데)
@@ -630,6 +788,8 @@ public partial class Form1 : Form
     private void Form1_Deactivate(object? sender, EventArgs e)
     {
         if (!_config.IsHideWindowBorderOnFocusOut) return;
+        // 알람 설정창/사이트 추가창을 쓰는 동안(메인 창이 비활성화됨)에는 타이틀바를 숨기지 않는다
+        if (_modalDepth > 0 || _alarmForm is { IsDisposed: false }) return;
         pnlTitleBar.Visible = false;
     }
 
@@ -639,21 +799,25 @@ public partial class Form1 : Form
         timer.Stop();
         Synth.Instance.Stop();
 
-        if (WindowState == FormWindowState.Normal)
+        // 최대화/최소화 상태에서도 일반 크기의 위치/크기(RestoreBounds)를 저장한다
+        var bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+        if (bounds.Width > 0 && bounds.Height > 0)
         {
-            _config.X = Location.X;
-            _config.Y = Location.Y;
+            _config.X = bounds.X;
+            _config.Y = bounds.Y;
             float s = DeviceDpi / 96f;
-            _config.Width = (int)(Size.Width / s);
-            _config.Height = (int)(Size.Height / s);
+            _config.Width = (int)(bounds.Width / s);
+            _config.Height = (int)(bounds.Height / s);
         }
 
-        _config.IsMaximize = WindowState == FormWindowState.Maximized;
+        // 최소화한 채 종료해도 직전 상태(최대화 여부)를 유지한다
+        _config.IsMaximize = (WindowState == FormWindowState.Minimized ? _lastNonMinimizedState : WindowState) == FormWindowState.Maximized;
         _config.TopMost = TopMost;
         _config.Opacity = Opacity;
 
-        if (webView.CoreWebView2 is not null)
-            _config.LatestUrl = webView.CoreWebView2.Source;
+        // 오류 페이지(chrome-error://)나 about:blank가 저장돼 다음 실행이 빈 화면이 되지 않도록 http(s)만 저장한다
+        if (webView.CoreWebView2 is not null && JHP.Api.Site.TryNormalizeUrl(webView.CoreWebView2.Source, out string src))
+            _config.LatestUrl = src;
 
         _config.Save();
     }

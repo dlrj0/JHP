@@ -17,6 +17,7 @@ public class SiteForm : Form
     private void InitializeComponent()
     {
         Text = "사이트 추가";
+        Icon = Program.AppIcon ?? Icon;
         Width = 360;
         Height = 176;
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -90,6 +91,13 @@ public class SiteForm : Form
             DialogResult = DialogResult.None;
             return;
         }
-        Result = new Site { Name = _tbName.Text.Trim(), Url = _tbUrl.Text.Trim() };
+        if (!JHP.Api.Site.TryNormalizeUrl(_tbUrl.Text, out string url))
+        {
+            MessageBox.Show("올바른 웹 주소가 아닙니다. http:// 또는 https://로 시작하는 주소를 입력해주세요.", "입력 오류",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            DialogResult = DialogResult.None;
+            return;
+        }
+        Result = new Site { Name = _tbName.Text.Trim(), Url = url };
     }
 }

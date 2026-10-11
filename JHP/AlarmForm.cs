@@ -39,6 +39,7 @@ public class AlarmForm : Form
     {
         SuspendLayout();
         Text = "알람 설정";
+        Icon = Program.AppIcon ?? Icon;
         Width = 600;
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterParent;
@@ -227,7 +228,7 @@ public class AlarmForm : Form
         btnCancel.Click += (_, _) => Close();
         Controls.Add(btnCancel);
 
-        Height = y + 72;
+        Height = y + 46; // 버튼(약 27px) 아래 여백 ~19px
         AcceptButton = btnOk;
         CancelButton = btnCancel;
 
@@ -252,14 +253,14 @@ public class AlarmForm : Form
         for (int i = 0; i < 8; i++) _alarmChecks[i].Checked = cfg.AlarmEnabled[i];
         _tbAlarmName.Text = cfg.AlarmName;
         _cbTts.Checked = cfg.Tts;
-        _tbVolume.Value = cfg.Volume;
-        _tbRate.Value = cfg.Rate;
+        _tbVolume.Value = Math.Clamp(cfg.Volume, _tbVolume.Minimum, _tbVolume.Maximum);
+        _tbRate.Value = Math.Clamp(cfg.Rate, _tbRate.Minimum, _tbRate.Maximum);
         _lblVolume.Text = $"볼륨: {cfg.Volume}";
         _lblRate.Text = $"TTS 속도: {cfg.Rate}";
         for (int i = 0; i < 3; i++)
         {
             _customNames[i].Text = cfg.CustomAlarms[i].Name;
-            _customTicks[i].Value = cfg.CustomAlarms[i].Tick;
+            _customTicks[i].Value = Math.Clamp(cfg.CustomAlarms[i].Tick, (int)_customTicks[i].Minimum, (int)_customTicks[i].Maximum);
             _customEnabled[i].Checked = cfg.CustomAlarms[i].Enabled;
         }
     }

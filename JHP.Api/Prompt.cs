@@ -29,9 +29,10 @@ public static class Prompt
     }
 
     // 확인/취소 다이얼로그
-    public static bool ShowDialog(string title, string message)
+    // owner를 지정하면 항상 위 상태의 메인 창 뒤에 가려지지 않는다.
+    public static bool ShowDialog(string title, string message, IWin32Window? owner = null)
     {
-        return MessageBox.Show(message, title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question)
+        return MessageBox.Show(owner, message, title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question)
                == DialogResult.OK;
     }
 }

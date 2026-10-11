@@ -4,10 +4,16 @@ using System.ComponentModel;
 
 public class ControlButton : Button
 {
-    public enum ButtonType { Minimize, Maximize, Close }
+    public enum ButtonType { Minimize, Maximize, Restore, Close }
+
+    private ButtonType _type = ButtonType.Close;
 
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-    public ButtonType Type { get; set; } = ButtonType.Close;
+    public ButtonType Type
+    {
+        get => _type;
+        set { _type = value; Invalidate(); }
+    }
 
     public ControlButton()
     {
@@ -20,6 +26,7 @@ public class ControlButton : Button
         FlatAppearance.BorderSize = 0;
         BackColor = Color.Transparent;
         Cursor = Cursors.Hand;
+        TabStop = false; // 포커스 표시를 그리지 않으므로 Tab으로 보이지 않는 곳에 멈추지 않게 한다
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -50,6 +57,16 @@ public class ControlButton : Button
             case ButtonType.Maximize:
                 g.DrawRectangle(pen, cx - r, cy - r, r * 2, r * 2);
                 break;
+            case ButtonType.Restore:
+            {
+                // 이전 크기 글리프: 뒤쪽 사각형(우상단)과 앞쪽 사각형(좌하단)이 겹친 모양
+                int q = r * 2 - (int)Math.Round(2 * s); // 사각형 한 변
+                int off = (int)Math.Round(2 * s);
+                int x0 = cx - r, y0 = cy - r;
+                g.DrawRectangle(pen, x0, y0 + off, q, q);
+                g.DrawLines(pen, [new Point(x0 + off, y0 + off), new Point(x0 + off, y0), new Point(x0 + off + q, y0), new Point(x0 + off + q, y0 + q)]);
+                break;
+            }
         }
     }
 

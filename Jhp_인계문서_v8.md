@@ -1,7 +1,7 @@
 # JHP 인계 문서 v8 (Sonnet 5.5용)
 
-> 새 대화 시작 시 이 파일 하나만 붙여넣으세요. v5·v6·v7 가이드와 `tree.md`, `메모.md`는 이 문서로 대체되어 삭제되었습니다 (git 기록에는 남아 있음).
-> 기준: 2026-10-12, 작업 트리 기준 (git HEAD `13ba229` + 미커밋 변경 5개 파일).
+> 새 대화 시작 시 `CLAUDE.md`를 먼저 읽고, 이 문서의 0장과 11장(현재 상태/남은 작업/변경 이력)을 읽으세요. v5·v6·v7 가이드와 `tree.md`, `메모.md`는 이 문서로 대체되어 삭제되었습니다 (git 기록에는 남아 있음).
+> 3~5장은 작업 초기의 **이력**이며 현재 상태는 11장이 기준입니다. 최신 커밋은 `git log`로 확인하세요.
 
 ---
 
@@ -253,9 +253,38 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 | 3 | 원본의 "사이트 관리" 창(목록+이름/주소+추가) 필요 여부 | 현재는 메뉴 ✕ 삭제 + 추가 대화상자. 원본은 목록이 있는 관리 창 |
 | 4 | 알람 소리/TTS 실제 재생 확인 | `alarm/`에 mp3를 넣고 사용자가 들어봐야 함 |
 | 5 | 사용자 요청 시 푸시, v1.1.0 Release 생성 | `UpdateChecker`는 Release 기준 |
-| 6 | 알람 설정창 하단 여백, 커스텀 알람 기본값(원본은 1초) 다듬기 | 사소함 |
+| 6 | ~~알람 설정창 하단 여백, 커스텀 알람 기본값(원본은 1초) 다듬기~~ | 완료(하단 여백 `y+46`, `CustomAlarm.Tick` 기본 1). 하단 여백은 사용자 육안 확인 권장 |
 
 ### 파일 지도 (이번 세션 변경분)
 - `JHP/Form1.cs`(레이아웃/메뉴/알람 토글/Timer_Tick), `JHP/Form1.Designer.cs`(AutoScale, 리사이즈 패널), `JHP/AlarmForm.cs`, `JHP/SiteForm.cs`
 - `JHP.Controls/ControlButton.cs`, `Timerbutton.cs`, `NSlider.cs`(DPI, 호버), `JHP.Api/Config.cs`(기본 사이트, 경로), `Synth.cs`(경로), `UpdateChecker.cs`, `ReSize.cs`
 - `tools/ui-test.ps1` (UI 자동 테스트), `CHANGELOG.md`(v1.1.0)
+
+### 추가 진행 (2026-10-12, 사용자 지적 사항 처리)
+| 발견 | 조치 |
+|------|------|
+| 타이틀바에 슬라이더/버튼이 많아 창을 잡을 빈 영역이 좁음 | 슬라이더 최대 폭 170→110(논리 px). 1000px 폭 기준 빈 영역 약 +120px. (더블클릭 최대화는 합성 입력으로 검증 불가해 보류) |
+| 볼륨/투명도 숫자 입력이 다 입력해야 반영됨 | `TextChanged`로 입력 즉시 반영(`ApplyInlineEditLive`), 숫자만 입력, 범위 밖/미완성 값은 확정 시 보정. 투명도 최소 30 미만은 입력 중 무시(창이 갑자기 어두워지는 것 방지) |
+| 프로그램 아이콘이 창/작업 표시줄에 없음 | `Program.AppIcon`(exe에서 `ExtractAssociatedIcon`)을 3개 폼의 `Icon`에 지정. `Resources\app.ico`는 원래 csproj에 있었음 |
+| 슬라이더를 끌 때마다 config.json 쓰기 | 400ms 디바운스 저장(`ScheduleSave`), 종료 시 저장은 그대로 |
+| 설정 파일 손상 시 다음 저장에서 사용자 설정이 사라짐 / 저장 중 종료 시 반쯤 써진 파일 | 임시 파일 교체 저장, 파싱 실패 시 `.corrupt` 사본 보존 |
+- 검증: 빌드 0 오류, `tools/ui-test.ps1` 27/27 통과(입력 즉시 반영·아이콘은 자동 검증 항목 없음 → 사용자 육안 확인 권장).
+- 아직 안 한 후보: 사이트 목록 순서 변경, 단축키, 새 창(window.open) 처리 정책, 단일 인스턴스, 알람 파일 누락 시 안내. (17:00 자동 작업이 이어서 검토)
+
+### 변경 이력 (되돌리기용)
+기능이 사라지거나 동작이 달라졌을 때 아래 항목 단위로 되돌립니다. 커밋 해시는 `git log --oneline`에서 해당 요약으로 찾고, `git revert <해시>`(이력 보존) 또는 문제 파일만 `git checkout <이전해시> -- <파일>`로 복구합니다.
+작업은 항목당 커밋 하나로 하고, 위험한 변경 전에는 `git tag jhp-checkpoint-<번호>`를 만듭니다.
+
+| 구분 | 변경 | 주로 건드린 파일 | 되돌릴 때 주의 |
+|------|------|------------------|----------------|
+| 사용자 지적 3건 | 타이틀바 슬라이더 폭 축소, 입력 즉시 반영, 폼 아이콘 | `Form1.cs`, `Program.cs`, `AlarmForm.cs`, `SiteForm.cs` | 아이콘은 `Program.AppIcon`을 3개 폼이 참조 |
+| 설정 안정화 | `Config.Normalize`, 임시 파일 교체 저장, `.corrupt` 보존 | `JHP.Api/Config.cs` | 되돌리면 손상된 config로 시작 시 예외 가능 |
+| 사이트 주소 검증 | `Site.TryNormalizeUrl/SameUrl`, 추가창 검증 | `JHP.Api/Site.cs`, `SiteForm.cs`, `Form1.cs` | `Form`에서 `Site`가 `Component.Site`와 겹치므로 `JHP.Api.Site.`로 호출 |
+| 오디오/TTS | 장치 없음 허용, 파일 없음 시 시스템 소리, 재생 후 해제 | `JHP.Api/Synth.cs` | |
+| 앱 수명 | 단일 인스턴스(폴더별 Mutex), 전역 예외 로그 | `JHP/Program.cs` | 다른 폴더의 사본은 서로 막지 않음 |
+| 알람 타이머 | 경과 시간 기준 계산(타이머 250ms), 바뀐 항목만 리셋 | `Form1.cs`, `Form1.Designer.cs` | `Timer.Interval`과 `Timer_Tick`의 `steps` 계산은 짝 |
+| 창 상태 | 최대화 영역 제한, 복원 글리프, RestoreBounds 저장 | `Form1.cs`, `ControlButton.cs` | `ButtonType.Restore` 추가됨 |
+| 메뉴/툴팁 | 체크 표시 다크화, ✕ 배율, 툴팁 | `DarkMenuRenderer.cs`, `Form1.cs` | |
+| 테스트 | 캡처 전 1.5초 대기(검게 캡처되는 문제) | `tools/ui-test.ps1` | |
+
+현재 검증: 빌드 0 오류, `tools/ui-test.ps1` 전체 통과(메뉴 열림 검사가 드물게 타이밍 때문에 실패 → 재실행 시 통과, 앱 문제 아님).

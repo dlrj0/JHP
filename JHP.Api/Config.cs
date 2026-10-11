@@ -55,10 +55,14 @@ public class Config
             if (File.Exists(ConfigPath))
             {
                 string json = File.ReadAllText(ConfigPath);
-                return JsonSerializer.Deserialize<Config>(json, JsonOptions) ?? new Config();
+                return (JsonSerializer.Deserialize<Config>(json, JsonOptions) ?? new Config()).Normalize();
             }
         }
-        catch { }
+        catch
+        {
+            // 설정 파일이 손상된 경우: 다음 저장에서 덮어써 사라지지 않도록 사본을 남기고 기본값으로 시작한다.
+            try { File.Copy(ConfigPath, ConfigPath + ".corrupt", overwrite: true); } catch { }
+        }
 
         // 설정 파일이 없을 때(첫 실행)만 원본 재획플레이어의 기본 사이트 목록을 채워 준다.
         var config = new Config();
@@ -79,11 +83,45 @@ public class Config
         return config;
     }
 
+    // 손으로 고치거나 구버전/손상된 파일에서 온 값을 앱이 쓰는 범위로 보정한다 (배열 길이, null, 범위).
+    // 이 값들이 그대로 들어가면 알람 설정창/타이머에서 예외가 나 앱이 종료된다.
+    private Config Normalize()
+    {
+        Width = Width > 0 ? Width : 800;
+        Height = Height > 0 ? Height : 600;
+        Opacity = double.IsNaN(Opacity) ? 1.0 : Math.Clamp(Opacity, 0.3, 1.0);
+        Volume = Math.Clamp(Volume, 0, 100);
+        Rate = Math.Clamp(Rate, -10, 10);
+
+        Sites = (Sites ?? []).Where(s => s is not null && !string.IsNullOrWhiteSpace(s.Url)).ToList();
+        DefaultSite ??= "";
+        AlarmName ??= "";
+        LatestUrl ??= "";
+
+        var enabled = new bool[8];
+        if (AlarmEnabled is not null)
+            Array.Copy(AlarmEnabled, enabled, Math.Min(AlarmEnabled.Length, enabled.Length));
+        AlarmEnabled = enabled;
+
+        var custom = (CustomAlarms ?? []).Where(c => c is not null).Take(3).ToList();
+        while (custom.Count < 3) custom.Add(new CustomAlarm());
+        foreach (var c in custom)
+        {
+            c.Name ??= "";
+            c.Tick = Math.Clamp(c.Tick, 0, 99999);
+        }
+        CustomAlarms = custom;
+        return this;
+    }
+
     public void Save()
     {
         try
         {
-            File.WriteAllText(ConfigPath, JsonSerializer.Serialize(this, JsonOptions));
+            // 임시 파일에 쓴 뒤 교체해, 저장 도중 종료되어도 설정 파일이 반쯤 써진 상태로 남지 않게 한다.
+            string tmp = ConfigPath + ".tmp";
+            File.WriteAllText(tmp, JsonSerializer.Serialize(this, JsonOptions));
+            File.Move(tmp, ConfigPath, overwrite: true);
         }
         catch { }
     }

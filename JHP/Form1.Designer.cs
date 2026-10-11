@@ -43,7 +43,7 @@ namespace JHP
         private void InitializeComponent()
         {
             components = new System.ComponentModel.Container();
-            timer = new System.Windows.Forms.Timer(components) { Interval = 1000 };
+            timer = new System.Windows.Forms.Timer(components) { Interval = 250 }; // 경과 시간 기준으로 갱신(Timer_Tick)
             toolTip = new System.Windows.Forms.ToolTip(components);
 
             pnlTitleBar = new Panel();

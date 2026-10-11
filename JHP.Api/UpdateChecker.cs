@@ -12,8 +12,12 @@ public static class UpdateChecker
         try
         {
             var client = new GitHubClient(new ProductHeaderValue("JHP-Updater"));
-            var release = await client.Repository.Release.GetLatest(Owner, Repo);
-            if (release is null) return (false, "", "");
+            // 네트워크가 막혀 있어도 오래 매달리지 않도록 10초로 제한
+            var request = client.Repository.Release.GetLatest(Owner, Repo);
+            if (await Task.WhenAny(request, Task.Delay(TimeSpan.FromSeconds(10))) != request)
+                return (false, "", "");
+            var release = await request;
+            if (release is null || string.IsNullOrWhiteSpace(release.TagName)) return (false, "", "");
 
             string latest = release.TagName.TrimStart('v');
             string current = currentVersion.TrimStart('v');

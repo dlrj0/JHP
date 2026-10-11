@@ -80,6 +80,8 @@ function Save-Window([IntPtr]$h, [string]$name) {
     if ($w -le 0 -or $ht -le 0) { Write-Host "  (캡처 생략: $name — 창 크기를 읽을 수 없음)"; return $null }
     $bmp = New-Object System.Drawing.Bitmap $w, $ht
     $g = [System.Drawing.Graphics]::FromImage($bmp); $hdc = $g.GetHdc()
+    # 막 열린 창은 일부 컨트롤이 아직 그려지지 않아 캡처에 검게 남을 수 있으므로 한 번 그려지길 기다렸다가 잡는다
+    Start-Sleep -Milliseconds 1500
     [Win]::PrintWindow($h, $hdc, 2) | Out-Null
     $g.ReleaseHdc($hdc); $g.Dispose()
     $path = Join-Path $OutDir "$name.png"; $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
