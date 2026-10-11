@@ -286,6 +286,7 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 | 창 상태 | 최대화 영역 제한, 복원 글리프, RestoreBounds 저장 | `Form1.cs`, `ControlButton.cs` | `ButtonType.Restore` 추가됨 |
 | 메뉴/툴팁 | 체크 표시 다크화, ✕ 배율, 툴팁 | `DarkMenuRenderer.cs`, `Form1.cs` | |
 | 테스트 | 캡처 전 1.5초 대기(검게 캡처되는 문제) | `tools/ui-test.ps1` | |
+| 테스트 확장 | 타이머 버튼 활성/비활성 색(PrintWindow 픽셀), 슬라이더 양 끝(투명도 30%/100%, 볼륨 0/100), 숫자 라벨 인라인 입력(WM_CHAR 즉시 반영·Esc 복원), 알람 설정창 확인/취소의 config.json 반영, 포커스 아웃 옵션(WM_ACTIVATE 합성). 각 검사는 `Run-Safe`로 UIA 오류 시 SKIP | `tools/ui-test.ps1` | 앱 코드는 바꾸지 않음. 통과 개수는 스크립트 출력으로 확인 |
 
 현재 검증: 빌드 0 오류, `tools/ui-test.ps1` 전체 통과(메뉴 열림 검사가 드물게 타이밍 때문에 실패 → 재실행 시 통과, 앱 문제 아님).
 
