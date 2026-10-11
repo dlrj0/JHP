@@ -11,7 +11,8 @@
 param(
     [string]$OutDir = (Join-Path $env:TEMP 'jhp-uitest'),
     [switch]$SkipBuild,
-    [switch]$KeepOnScreen   # 기본은 테스트 창을 화면 밖으로 치워 사용자의 화면을 가리지 않는다
+    [switch]$KeepOnScreen,  # 기본은 테스트 창을 화면 밖으로 치워 사용자의 화면을 가리지 않는다
+    [switch]$IncludeMenu    # ▼ 메뉴 검사 포함. ContextMenuStrip은 화면 밖 좌표에서도 화면 가장자리에 잠깐 보이므로 기본은 건너뜀
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,7 +63,10 @@ if (-not $SkipBuild) {
     if ($errs -gt 0) { $out | Select-Object -Last 15; exit 1 }
 }
 Remove-Item (Join-Path $app 'config.json') -ErrorAction SilentlyContinue   # 첫 실행 상태에서 시작
+# 앱이 처음부터 화면 밖(-20000,0)에 뜨도록 한다 (실행 직후 사용자의 화면에 잠깐 보이는 것을 막음)
+if (-not $KeepOnScreen) { $env:JHP_OFFSCREEN = '1' }
 $proc = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
+Remove-Item Env:\JHP_OFFSCREEN -ErrorAction SilentlyContinue
 $main = [IntPtr]::Zero
 for ($i = 0; $i -lt 60; $i++) {
     Start-Sleep -Milliseconds 250
@@ -211,6 +215,8 @@ try {
     }
 
     # ---------- 6. ▼ 메뉴 ----------
+    if (-not $IncludeMenu) { Write-Host '[SKIP] menu/site: 팝업이 사용자 화면에 보일 수 있어 기본은 건너뜀 (-IncludeMenu로 실행)' }
+    else {
     $els = Get-Elements $main; $menuBtn = ($els | Where-Object { $_.Type -eq 'Button' } | Sort-Object L)[0]
     Invoke-El $menuBtn
     $popup = [IntPtr]::Zero
@@ -255,6 +261,8 @@ try {
             }
         }
     }
+
+    }  # end if IncludeMenu
 
     # ---------- 7. 넓은 창 (최대화 상당) ----------
     # 실제 최대화는 사용자의 화면 위로 창이 올라오므로, 화면 밖에서 크게 늘려 검증한다.

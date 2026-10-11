@@ -59,6 +59,10 @@ public partial class Form1 : Form
         if (IsOnScreen(new Rectangle(_config.X, _config.Y, Width, Height)))
             Location = new Point(_config.X, _config.Y);
 
+        // 자동 테스트용: 환경 변수 JHP_OFFSCREEN=1이면 창을 처음부터 화면 밖에 띄워 사용자의 화면에 보이지 않게 한다.
+        if (Environment.GetEnvironmentVariable("JHP_OFFSCREEN") == "1")
+            Location = new Point(-20000, 0);
+
         LayoutTitleBar();
 
         // 최대화 복원은 웹뷰 초기화 전에 해서, 일반 크기로 떴다가 커지는 깜빡임을 줄인다.
