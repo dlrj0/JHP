@@ -271,6 +271,32 @@ try {
     $winRect = Get-Rect $main
     Test-NoOverlap 'wide'
     Save-Window $main '08-wide' | Out-Null
+
+    # ---------- 8. 정상 종료 시 설정 저장 ----------
+    # 앞의 슬라이더 검사에서 볼륨을 100으로 만들었다. WM_CLOSE(정상 종료)로 닫은 뒤 config.json에 반영됐는지 본다.
+    [Win]::PostMessage($main, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+    $proc.WaitForExit(10000) | Out-Null
+    Check 'close: WM_CLOSE로 정상 종료됨' $proc.HasExited
+    $cfgPath = Join-Path $app 'config.json'
+    $cfgText = if (Test-Path $cfgPath) { Get-Content $cfgPath -Raw -Encoding UTF8 } else { '' }
+    Check 'close: 종료 시 config.json에 볼륨 100 저장' ($cfgText -match '"volume":\s*100') ($cfgText.Length.ToString() + ' bytes')
+    Check 'close: 종료 시 사이트 목록 7개 저장' ((([regex]::Matches($cfgText, '"url":')).Count) -eq 7)
+
+    # ---------- 9. 손상된 설정 파일로 시작 ----------
+    Set-Content -LiteralPath $cfgPath -Value '{ "volume": 999, "alarmEnabled": [true], "customAlarms": [], "sites": null, ' -Encoding UTF8
+    Remove-Item (Join-Path $app 'config.json.corrupt') -ErrorAction SilentlyContinue
+    if (-not $KeepOnScreen) { $env:JHP_OFFSCREEN = '1' }
+    $proc2 = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
+    Remove-Item Env:\JHP_OFFSCREEN -ErrorAction SilentlyContinue
+    $alive = $false
+    for ($i = 0; $i -lt 40; $i++) {
+        Start-Sleep -Milliseconds 250; $proc2.Refresh()
+        if ($proc2.HasExited) { break }
+        if ($proc2.MainWindowHandle -ne [IntPtr]::Zero -and $i -ge 12) { $alive = $true; break }
+    }
+    Check 'robust: 손상된 config.json으로도 시작되고 종료되지 않음' $alive
+    Check 'robust: 손상된 설정 사본(config.json.corrupt) 보존' (Test-Path (Join-Path $app 'config.json.corrupt'))
+    if (-not $proc2.HasExited) { $proc2.Kill() }
 }
 finally {
     if (-not $proc.HasExited) { $proc.Kill() }

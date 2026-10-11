@@ -55,7 +55,10 @@ public class Config
             if (File.Exists(ConfigPath))
             {
                 string json = File.ReadAllText(ConfigPath);
-                return (JsonSerializer.Deserialize<Config>(json, JsonOptions) ?? new Config()).Normalize();
+                var loaded = JsonSerializer.Deserialize<Config>(json, JsonOptions);
+                if (loaded is not null) return loaded.Normalize();
+                // 내용이 null 등 쓸 수 없는 값이면 손상된 것으로 취급
+                try { File.Copy(ConfigPath, ConfigPath + ".corrupt", overwrite: true); } catch { }
             }
         }
         catch
@@ -64,9 +67,8 @@ public class Config
             try { File.Copy(ConfigPath, ConfigPath + ".corrupt", overwrite: true); } catch { }
         }
 
-        // 설정 파일이 없을 때(첫 실행)만 원본 재획플레이어의 기본 사이트 목록을 채워 준다.
+        // 설정 파일이 없거나(첫 실행) 읽을 수 없을 때 원본 재획플레이어의 기본 사이트 목록을 채워 준다.
         var config = new Config();
-        if (!File.Exists(ConfigPath))
         {
             config.Sites =
             [

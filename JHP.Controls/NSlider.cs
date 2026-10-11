@@ -33,9 +33,41 @@ public class NSlider : Control
     {
         SetStyle(ControlStyles.AllPaintingInWmPaint |
                  ControlStyles.UserPaint |
-                 ControlStyles.DoubleBuffer, true);
+                 ControlStyles.DoubleBuffer |
+                 ControlStyles.Selectable, true);
+        TabStop = true;
         Height = 20;
     }
+
+    // 키보드: ←/→ ±1, PgUp/PgDn ±10, Home/End 처음/끝. 마우스 휠: ±5.
+    protected override bool IsInputKey(Keys keyData) =>
+        keyData is Keys.Left or Keys.Right or Keys.Up or Keys.Down or Keys.PageUp or Keys.PageDown or Keys.Home or Keys.End
+        || base.IsInputKey(keyData);
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        int step = e.KeyCode switch
+        {
+            Keys.Left or Keys.Down => -1,
+            Keys.Right or Keys.Up => 1,
+            Keys.PageDown => -10,
+            Keys.PageUp => 10,
+            _ => 0
+        };
+        if (step != 0) { Value += step; e.Handled = true; }
+        else if (e.KeyCode == Keys.Home) { Value = _min; e.Handled = true; }
+        else if (e.KeyCode == Keys.End) { Value = _max; e.Handled = true; }
+    }
+
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        Value += e.Delta > 0 ? 5 : -5;
+    }
+
+    protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
+    protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
 
     protected override void OnPaint(PaintEventArgs e)
     {
@@ -53,9 +85,16 @@ public class NSlider : Control
         int tx = Math.Clamp(fillW, tr, Width - tr);
         using var thumbBrush = new SolidBrush(Color.White);
         g.FillEllipse(thumbBrush, tx - tr, cy - tr, tr * 2, tr * 2);
+
+        // 키보드 포커스 표시 (마우스로만 쓸 때는 보이지 않음)
+        if (Focused && ShowFocusCues)
+        {
+            using var ring = new Pen(Color.FromArgb(100, 160, 255), Math.Max(1f, s));
+            g.DrawEllipse(ring, tx - tr - 2, cy - tr - 2, tr * 2 + 4, tr * 2 + 4);
+        }
     }
 
-    protected override void OnMouseDown(MouseEventArgs e) { _dragging = true; UpdateValue(e.X); }
+    protected override void OnMouseDown(MouseEventArgs e) { Focus(); _dragging = true; UpdateValue(e.X); }
     protected override void OnMouseMove(MouseEventArgs e) { if (_dragging) UpdateValue(e.X); }
     protected override void OnMouseUp(MouseEventArgs e) { _dragging = false; }
 
