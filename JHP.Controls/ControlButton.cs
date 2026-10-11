@@ -13,7 +13,8 @@ public class ControlButton : Button
     {
         SetStyle(ControlStyles.AllPaintingInWmPaint |
                  ControlStyles.UserPaint |
-                 ControlStyles.DoubleBuffer, true);
+                 ControlStyles.DoubleBuffer |
+                 ControlStyles.SupportsTransparentBackColor, true);
         Size = new Size(46, 30);
         FlatStyle = FlatStyle.Flat;
         FlatAppearance.BorderSize = 0;

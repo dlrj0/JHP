@@ -12,7 +12,7 @@ public partial class Form1 : Form
     private static readonly int[] AlarmSeconds = [7200, 3600, 1800, 1200, 900, 600, 100, 55];
     private static readonly string[] AlarmLabels = ["2시간", "1시간", "30분", "20분", "15분", "10분", "100초", "55초"];
 
-    private const string CurrentVersion = "v1.0.0";
+    private const string CurrentVersion = "v1.1.0";
 
     private readonly Config _config = Config.Instance;
     private readonly int[] _remaining = new int[8];
@@ -62,6 +62,18 @@ public partial class Form1 : Form
         // 타이틀바 드래그 이동 (timerButton 제외 — 버튼 클릭과 충돌)
         pnlTitleBar.MouseDown += TitleBar_MouseDown;
         lblTitle.MouseDown += TitleBar_MouseDown;
+        pnlTitleBar.MouseMove += TitleBar_MouseMove;
+
+        // 가장자리 리사이즈 핸들 (webView가 가장자리를 덮고 있어 WM_NCHITTEST 방식이 동작하지 않음)
+        pnlResizeLeft.MouseDown += (_, e) => BeginResize(e, HTLEFT);
+        pnlResizeRight.MouseDown += (_, e) => BeginResize(e, HTRIGHT);
+        pnlResizeBottom.MouseDown += ResizeBottom_MouseDown;
+        pnlResizeBottom.MouseMove += ResizeBottom_MouseMove;
+
+        // 창 폭에 맞춰 볼륨/투명도 영역을 재배치 (라벨-슬라이더 겹침 방지)
+        pnlTitleBar.Resize += (_, _) => LayoutTitleBar();
+        lblVolumeValue.TextChanged += (_, _) => LayoutTitleBar();
+        lblOpacityValue.TextChanged += (_, _) => LayoutTitleBar();
 
         btnMinimize.Click += (_, _) => WindowState = FormWindowState.Minimized;
         btnMaximize.Click += (_, _) =>
@@ -456,8 +468,95 @@ public partial class Form1 : Form
     private void TitleBar_MouseDown(object? sender, MouseEventArgs e)
     {
         if (e.Button != MouseButtons.Left) return;
+
+        // 타이틀바 상단/좌우 가장자리는 리사이즈, 그 외는 창 이동
+        if (sender is Panel && TitleBarEdgeHit(e.Location) is int hit and not HTCLIENT)
+        {
+            BeginResize(e, hit);
+            return;
+        }
+
         ReleaseCapture();
         SendMessage(Handle, WM_NCLBUTTONDOWN, HTCAPTION, IntPtr.Zero);
+    }
+
+    private void TitleBar_MouseMove(object? sender, MouseEventArgs e)
+    {
+        pnlTitleBar.Cursor = HitToCursor(TitleBarEdgeHit(e.Location));
+    }
+
+    // 타이틀바 가장자리 판정 (상단 + 좌우). 최대화 상태에서는 리사이즈 없음.
+    private int TitleBarEdgeHit(Point p)
+    {
+        if (WindowState != FormWindowState.Normal) return HTCLIENT;
+        bool top = p.Y < ResizeEdge;
+        bool left = p.X < ResizeEdge;
+        bool right = p.X >= pnlTitleBar.Width - ResizeEdge;
+        if (top && left) return HTTOPLEFT;
+        if (top && right) return HTTOPRIGHT;
+        if (top) return HTTOP;
+        if (left) return HTLEFT;
+        if (right) return HTRIGHT;
+        return HTCLIENT;
+    }
+
+    private void ResizeBottom_MouseDown(object? sender, MouseEventArgs e) =>
+        BeginResize(e, BottomEdgeHit(e.Location));
+
+    private void ResizeBottom_MouseMove(object? sender, MouseEventArgs e) =>
+        pnlResizeBottom.Cursor = HitToCursor(BottomEdgeHit(e.Location));
+
+    // 하단 핸들의 좌우 끝은 모서리(대각선) 리사이즈
+    private int BottomEdgeHit(Point p)
+    {
+        const int corner = 12;
+        if (p.X < corner) return HTBOTTOMLEFT;
+        if (p.X >= pnlResizeBottom.Width - corner) return HTBOTTOMRIGHT;
+        return HTBOTTOM;
+    }
+
+    private static Cursor HitToCursor(int hit) => hit switch
+    {
+        HTLEFT or HTRIGHT => Cursors.SizeWE,
+        HTTOP or HTBOTTOM => Cursors.SizeNS,
+        HTTOPLEFT or HTBOTTOMRIGHT => Cursors.SizeNWSE,
+        HTTOPRIGHT or HTBOTTOMLEFT => Cursors.SizeNESW,
+        _ => Cursors.Default
+    };
+
+    private void BeginResize(MouseEventArgs e, int hit)
+    {
+        if (e.Button != MouseButtons.Left || WindowState != FormWindowState.Normal || hit == HTCLIENT) return;
+        ReleaseCapture();
+        SendMessage(Handle, WM_NCLBUTTONDOWN, hit, IntPtr.Zero);
+    }
+
+    // ===== 타이틀바 반응형 배치 =====
+    // [볼륨 라벨][슬라이더] [투명도 라벨][슬라이더] 를 최소화 버튼 왼쪽까지 남은 폭에 맞춰 배치한다.
+    // 라벨 폭은 "최대 글자수" 기준으로 예약해서 값이 바뀌어도(볼륨 5 → 100) 슬라이더와 겹치지 않는다.
+    private void LayoutTitleBar()
+    {
+        if (btnMinimize is null || sliderOpacity is null) return;
+
+        const int startX = 136, gap = 8, groupGap = 16, rightPad = 12, minSlider = 60, maxSlider = 170;
+
+        int volLabelW = TextRenderer.MeasureText("볼륨 100", lblVolumeValue.Font).Width + 4;
+        int opaLabelW = TextRenderer.MeasureText("투명도 100%", lblOpacityValue.Font).Width + 4;
+
+        int limit = btnMinimize.Left - rightPad;
+        int available = limit - startX - volLabelW - opaLabelW - gap * 2 - groupGap;
+        int sliderW = Math.Clamp(available / 2, minSlider, maxSlider);
+
+        int x = startX;
+        lblVolumeValue.Left = x;
+        x += volLabelW + gap;
+        sliderVolume.Left = x;
+        sliderVolume.Width = sliderW;
+        x += sliderW + groupGap;
+        lblOpacityValue.Left = x;
+        x += opaLabelW + gap;
+        sliderOpacity.Left = x;
+        sliderOpacity.Width = sliderW;
     }
 
     // ===== 포커스 아웃 시 테두리 숨김 =====
@@ -497,8 +596,9 @@ public partial class Form1 : Form
         _config.Save();
     }
 
-    // ===== 테두리 없는 창 리사이즈 (WM_NCHITTEST) =====
-    private const int WM_NCHITTEST = 0x0084;
+    // ===== 테두리 없는 창 리사이즈 =====
+    // webView/타이틀바가 클라이언트 영역을 전부 덮어 WM_NCHITTEST가 폼에 도달하지 않으므로,
+    // 가장자리 패널/타이틀바 MouseDown에서 SendMessage(WM_NCLBUTTONDOWN, HTxxx)로 직접 리사이즈를 시작한다.
     private const int HTCLIENT = 1;
     private const int HTCAPTION = 2;
     private const int HTLEFT = 10;
@@ -516,36 +616,4 @@ public partial class Form1 : Form
 
     [DllImport("user32.dll")]
     private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, IntPtr lParam);
-
-    protected override void WndProc(ref Message m)
-    {
-        base.WndProc(ref m);
-        if (m.Msg != WM_NCHITTEST || WindowState != FormWindowState.Normal || (int)m.Result != HTCLIENT)
-            return;
-
-        int x = unchecked((short)(m.LParam.ToInt32() & 0xFFFF));
-        int y = unchecked((short)((m.LParam.ToInt32() >> 16) & 0xFFFF));
-        var pos = ReSize.GetMousePosition(this, PointToClient(new Point(x, y)));
-
-        m.Result = (IntPtr)(pos switch
-        {
-            ReSize.MousePosition.Left => HTLEFT,
-            ReSize.MousePosition.Right => HTRIGHT,
-            ReSize.MousePosition.Top => HTTOP,
-            ReSize.MousePosition.Bottom => HTBOTTOM,
-            ReSize.MousePosition.TopLeft => HTTOPLEFT,
-            ReSize.MousePosition.TopRight => HTTOPRIGHT,
-            ReSize.MousePosition.BottomLeft => HTBOTTOMLEFT,
-            ReSize.MousePosition.BottomRight => HTBOTTOMRIGHT,
-            _ => HTCLIENT
-        });
-    }
-
-    // 🟢 추가: 창 가장자리에서 리사이즈 커서(↔↕) 시각적 피드백
-    protected override void OnMouseMove(MouseEventArgs e)
-    {
-        base.OnMouseMove(e);
-        if (WindowState == FormWindowState.Normal)
-            Cursor = ReSize.SetThick(ReSize.GetMousePosition(this, e.Location));
-    }
 }

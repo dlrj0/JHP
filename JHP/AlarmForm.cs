@@ -187,7 +187,9 @@ public class AlarmForm : Form
 
     private Label AddLabel(string text, int left, int top, int width)
     {
-        var lbl = new Label { Text = text, Left = left, Top = top, Width = width, ForeColor = Color.LightGray };
+        // AutoSize: 폰트/DPI 배율이 달라도 글자가 잘리지 않도록 텍스트 길이에 맞춰 폭이 정해진다.
+        // width 인자는 기존 호출부 호환용(최소 폭)으로만 사용.
+        var lbl = new Label { Text = text, Left = left, Top = top, MinimumSize = new Size(width, 0), AutoSize = true, ForeColor = Color.LightGray };
         Controls.Add(lbl);
         return lbl;
     }

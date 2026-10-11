@@ -35,6 +35,11 @@ namespace JHP
 
         private WebView2 webView;
 
+        private const int ResizeEdge = 5;
+        private Panel pnlResizeLeft;
+        private Panel pnlResizeRight;
+        private Panel pnlResizeBottom;
+
         private void InitializeComponent()
         {
             components = new System.ComponentModel.Container();
@@ -156,7 +161,17 @@ namespace JHP
 
             // pnlSidebar(Left)/pnlMenuBar(Top) 제거 — V버튼 드롭다운으로 흡수됨에 따라
             // Dock=Top 패널이 pnlTitleBar 하나만 남아 z-order 문제가 사라짐.
+            // 리사이즈 핸들: webView가 클라이언트 영역을 빈틈없이 덮어 WM_NCHITTEST가 폼에 도달하지 못하므로,
+            // 가장자리에 얇은 패널을 두고 MouseDown에서 SendMessage(WM_NCLBUTTONDOWN, HTxxx)로 리사이즈를 시작한다.
+            pnlResizeLeft = new Panel { Dock = DockStyle.Left, Width = ResizeEdge, Cursor = Cursors.SizeWE, BackColor = Color.FromArgb(24, 24, 24) };
+            pnlResizeRight = new Panel { Dock = DockStyle.Right, Width = ResizeEdge, Cursor = Cursors.SizeWE, BackColor = Color.FromArgb(24, 24, 24) };
+            pnlResizeBottom = new Panel { Dock = DockStyle.Bottom, Height = ResizeEdge, BackColor = Color.FromArgb(24, 24, 24) };
+
+            // Dock 처리 순서: 나중에 추가한 것부터 → 타이틀바(Top) → 하단 → 우 → 좌 → webView(Fill)
             Controls.Add(webView);
+            Controls.Add(pnlResizeLeft);
+            Controls.Add(pnlResizeRight);
+            Controls.Add(pnlResizeBottom);
             Controls.Add(pnlTitleBar);
 
             ResumeLayout(false);
