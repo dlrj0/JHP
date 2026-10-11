@@ -29,13 +29,14 @@ public class ControlButton : Button
 
         Color bg = hovered
             ? (Type == ButtonType.Close ? Color.FromArgb(196, 43, 28) : Color.FromArgb(60, 60, 60))
-            : Color.Transparent;
+            : (Parent?.BackColor ?? Color.FromArgb(28, 28, 28)); // 투명 브러시는 더블버퍼(검정)가 그대로 보이므로 부모 배경색으로 칠한다
 
         using var bgBrush = new SolidBrush(bg);
         g.FillRectangle(bgBrush, ClientRectangle);
 
-        int cx = Width / 2, cy = Height / 2, r = 5;
-        using var pen = new Pen(Color.White, 1.2f);
+        float s = DeviceDpi / 96f;
+        int cx = Width / 2, cy = Height / 2, r = (int)Math.Round(5 * s);
+        using var pen = new Pen(Color.White, 1.2f * s);
 
         switch (Type)
         {

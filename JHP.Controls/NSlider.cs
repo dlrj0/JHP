@@ -40,18 +40,19 @@ public class NSlider : Control
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics;
-        int cy = Height / 2;
+        float s = DeviceDpi / 96f;
+        int cy = Height / 2, half = (int)Math.Round(2 * s), tr = (int)Math.Round(7 * s);
 
         using var trackBrush = new SolidBrush(Color.FromArgb(60, 60, 60));
-        g.FillRectangle(trackBrush, 0, cy - 2, Width, 4);
+        g.FillRectangle(trackBrush, 0, cy - half, Width, half * 2);
 
         int fillW = _max == _min ? 0 : (int)((double)(_value - _min) / (_max - _min) * Width);
         using var fillBrush = new SolidBrush(Color.FromArgb(100, 160, 255));
-        g.FillRectangle(fillBrush, 0, cy - 2, fillW, 4);
+        g.FillRectangle(fillBrush, 0, cy - half, fillW, half * 2);
 
-        int tx = Math.Clamp(fillW, 7, Width - 7);
+        int tx = Math.Clamp(fillW, tr, Width - tr);
         using var thumbBrush = new SolidBrush(Color.White);
-        g.FillEllipse(thumbBrush, tx - 7, cy - 7, 14, 14);
+        g.FillEllipse(thumbBrush, tx - tr, cy - tr, tr * 2, tr * 2);
     }
 
     protected override void OnMouseDown(MouseEventArgs e) { _dragging = true; UpdateValue(e.X); }

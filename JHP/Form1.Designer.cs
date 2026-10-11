@@ -88,6 +88,7 @@ namespace JHP
             btnMenu.Text = "▼";
             btnMenu.Cursor = Cursors.Hand;
             btnMenu.UseVisualStyleBackColor = false;
+            btnMenu.TabStop = false;
 
             // timerButton: lblNextAlarm + btnAlarmSettings 대체
             // 좌클릭=타이머 시작/정지, 우클릭=알람설정
@@ -123,15 +124,13 @@ namespace JHP
             tbInlineEdit.ForeColor = Color.White;
             tbInlineEdit.BorderStyle = BorderStyle.FixedSingle;
 
-            btnMinimize.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            // 우측 버튼 위치는 LayoutTitleBar()에서 계산 (Anchor는 패널 기본 폭 200 기준으로 계산되어 창 밖으로 밀려남)
             btnMinimize.Location = new Point(862, 3);
             btnMinimize.Type = ControlButton.ButtonType.Minimize;
 
-            btnMaximize.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnMaximize.Location = new Point(908, 3);
             btnMaximize.Type = ControlButton.ButtonType.Maximize;
 
-            btnClose.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnClose.Location = new Point(954, 3);
             btnClose.Type = ControlButton.ButtonType.Close;
 
@@ -152,7 +151,9 @@ namespace JHP
             webView.DefaultBackgroundColor = Color.FromArgb(24, 24, 24);
 
             // ===== Form1 =====
-            AutoScaleMode = AutoScaleMode.Font;
+            // DPI 배율(125%/150%/200%)에서 좌표·크기가 같이 커지도록 Dpi 모드 사용 (좌표는 96dpi 기준 값)
+            AutoScaleDimensions = new SizeF(96F, 96F);
+            AutoScaleMode = AutoScaleMode.Dpi;
             BackColor = Color.FromArgb(24, 24, 24);
             ClientSize = new Size(1000, 650);
             MinimumSize = new Size(760, 420);

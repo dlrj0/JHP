@@ -6,7 +6,12 @@ namespace JHP;
 
 public class AlarmForm : Form
 {
-    private static readonly string[] AlarmLabels = ["2시간", "1시간", "30분", "20분", "15분", "10분", "100초", "55초"];
+    // 원본 재획플레이어의 항목명 (시간별 용도). TTS로 읽는 이름과 같다.
+    private static readonly string[] AlarmLabels =
+    [
+        "재획비 (2시간)", "경쿠 (1시간)", "경뿌/경쿠/유니온 (30분)", "유니온 버프 (20분)",
+        "경쿠 (15분)", "유니온 버프 (10분)", "메소 회수 (100초)", "파운틴 (55초)"
+    ];
 
     private readonly CheckBox[] _alarmChecks = new CheckBox[8];
     private readonly TextBox[] _customNames = new TextBox[3];
@@ -14,12 +19,15 @@ public class AlarmForm : Form
     private readonly CheckBox[] _customEnabled = new CheckBox[3];
 
     private Panel _pnlTitle = null!;
-    private TextBox _tbAlarmName = null!;
+    private ComboBox _tbAlarmName = null!;
     private CheckBox _cbTts = null!;
     private TrackBar _tbVolume = null!;
     private TrackBar _tbRate = null!;
     private Label _lblVolume = null!;
     private Label _lblRate = null!;
+
+    // 확인 버튼으로 닫혔는지 (비모달 폼이라 DialogResult 대신 사용)
+    public bool Accepted { get; private set; }
 
     public AlarmForm()
     {
@@ -29,6 +37,7 @@ public class AlarmForm : Form
 
     private void InitializeComponent()
     {
+        SuspendLayout();
         Text = "알람 설정";
         Width = 600;
         FormBorderStyle = FormBorderStyle.None;
@@ -56,11 +65,12 @@ public class AlarmForm : Form
 
         var btnClose = new ControlButton
         {
-            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            // 위치는 _pnlTitle.Resize에서 계산 (Anchor는 패널 기본 폭 기준이라 어긋날 수 있음)
             Location = new Point(_pnlTitle.Width - 46, 1),
             Type = ControlButton.ButtonType.Close
         };
-        btnClose.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
+        btnClose.Click += (_, _) => Close();
+        _pnlTitle.Resize += (_, _) => btnClose.Left = _pnlTitle.Width - btnClose.Width;
 
         _pnlTitle.Controls.Add(lblCaption);
         _pnlTitle.Controls.Add(btnClose);
@@ -79,26 +89,62 @@ public class AlarmForm : Form
             _alarmChecks[i] = new CheckBox
             {
                 Text = AlarmLabels[i],
-                Left = 12 + (i % 4) * 135,
-                Top = y + (i / 4) * 28,
-                Width = 128,
+                Left = 12 + (i % 2) * 290,
+                Top = y + (i / 2) * 28,
+                Width = 280,
                 ForeColor = Color.White
             };
             Controls.Add(_alarmChecks[i]);
         }
-        y += 64;
+        y += 4 * 28 + 8;
 
-        AddLabel("알람 파일명", 12, y + 3, 90);
-        _tbAlarmName = new TextBox
+        AddLabel("알람 소리", 12, y + 3, 90);
+        // alarm 폴더의 mp3 목록을 드롭다운으로 보여주고, ▷ 버튼으로 미리 들어볼 수 있다 (직접 입력도 가능).
+        _tbAlarmName = new ComboBox
         {
-            Left = 108, Top = y, Width = ClientSize.Width - 120,
+            Left = 108, Top = y, Width = ClientSize.Width - 120 - 46,
+            DropDownStyle = ComboBoxStyle.DropDown,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
+        try
+        {
+            string dir = Path.Combine(AppContext.BaseDirectory, "alarm");
+            if (Directory.Exists(dir))
+                foreach (var f in Directory.GetFiles(dir, "*.mp3").OrderBy(f => f))
+                    _tbAlarmName.Items.Add(Path.GetFileName(f));
+        }
+        catch { }
         Controls.Add(_tbAlarmName);
-        y += 32;
 
-        _cbTts = new CheckBox { Text = "TTS 사용", Left = 12, Top = y, Width = 100, ForeColor = Color.White };
+        var btnPlay = new Button
+        {
+            Text = "▷",
+            Left = ClientSize.Width - 12 - 40, Top = y - 1, Width = 40, Height = 26,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(60, 60, 60),
+            ForeColor = Color.White,
+            Anchor = AnchorStyles.Top | AnchorStyles.Right
+        };
+        btnPlay.FlatAppearance.BorderSize = 0;
+        btnPlay.Click += (_, _) => Synth.Instance.Ring(_tbAlarmName.Text, _tbVolume.Value);
+        Controls.Add(btnPlay);
+        y += 34;
+
+        _cbTts = new CheckBox { Text = "TTS 출력 (선택 시 소리재생 X)", Left = 12, Top = y, Width = 330, ForeColor = Color.White };
         Controls.Add(_cbTts);
+
+        var btnSample = new Button
+        {
+            Text = "TTS 샘플",
+            Left = ClientSize.Width - 12 - 110, Top = y - 2, Width = 110, Height = 26,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(60, 60, 60),
+            ForeColor = Color.White,
+            Anchor = AnchorStyles.Top | AnchorStyles.Right
+        };
+        btnSample.FlatAppearance.BorderSize = 0;
+        btnSample.Click += (_, _) => Synth.Instance.TTS("재획비", _tbVolume.Value, _tbRate.Value);
+        Controls.Add(btnSample);
         y += 30;
 
         _lblVolume = AddLabel("볼륨: 0", 12, y + 8, 90);
@@ -112,14 +158,14 @@ public class AlarmForm : Form
         Controls.Add(_tbVolume);
         y += 42;
 
-        _lblRate = AddLabel("속도: 0", 12, y + 8, 90);
+        _lblRate = AddLabel("TTS 속도: 0", 12, y + 8, 90);
         _tbRate = new TrackBar
         {
             Left = 108, Top = y, Width = ClientSize.Width - 120,
             Minimum = -10, Maximum = 10, TickFrequency = 2,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
-        _tbRate.ValueChanged += (s, e) => _lblRate.Text = $"속도: {_tbRate.Value}";
+        _tbRate.ValueChanged += (s, e) => _lblRate.Text = $"TTS 속도: {_tbRate.Value}";
         Controls.Add(_tbRate);
         y += 42;
 
@@ -155,7 +201,6 @@ public class AlarmForm : Form
             Left = ClientSize.Width - 180,
             Top = y,
             Width = 80,
-            DialogResult = DialogResult.OK,
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(55, 90, 145),
             ForeColor = Color.White,
@@ -163,6 +208,7 @@ public class AlarmForm : Form
         };
         btnOk.FlatAppearance.BorderSize = 0;
         btnOk.Click += BtnOk_Click;
+        btnOk.Click += (_, _) => Close();
         Controls.Add(btnOk);
 
         var btnCancel = new Button
@@ -171,18 +217,24 @@ public class AlarmForm : Form
             Left = ClientSize.Width - 92,
             Top = y,
             Width = 80,
-            DialogResult = DialogResult.Cancel,
+
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(60, 60, 60),
             ForeColor = Color.White,
             Anchor = AnchorStyles.Bottom | AnchorStyles.Right
         };
         btnCancel.FlatAppearance.BorderSize = 0;
+        btnCancel.Click += (_, _) => Close();
         Controls.Add(btnCancel);
 
         Height = y + 72;
         AcceptButton = btnOk;
         CancelButton = btnCancel;
+
+        // 배율 적용은 자식 컨트롤을 모두 추가한 뒤에 해야 한다(앞에서 하면 빈 폼에만 적용됨). 좌표는 96dpi 기준.
+        AutoScaleDimensions = new SizeF(96F, 96F);
+        AutoScaleMode = AutoScaleMode.Dpi;
+        ResumeLayout(false);
     }
 
     private Label AddLabel(string text, int left, int top, int width)
@@ -203,7 +255,7 @@ public class AlarmForm : Form
         _tbVolume.Value = cfg.Volume;
         _tbRate.Value = cfg.Rate;
         _lblVolume.Text = $"볼륨: {cfg.Volume}";
-        _lblRate.Text = $"속도: {cfg.Rate}";
+        _lblRate.Text = $"TTS 속도: {cfg.Rate}";
         for (int i = 0; i < 3; i++)
         {
             _customNames[i].Text = cfg.CustomAlarms[i].Name;
@@ -227,6 +279,7 @@ public class AlarmForm : Form
             cfg.CustomAlarms[i].Enabled = _customEnabled[i].Checked;
         }
         cfg.Save();
+        Accepted = true;
         Synth.Instance.SetVolume(cfg.Volume);
         Synth.Instance.SetRate(cfg.Rate);
     }

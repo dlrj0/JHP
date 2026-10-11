@@ -10,7 +10,8 @@ namespace JHP;
 public partial class Form1 : Form
 {
     private static readonly int[] AlarmSeconds = [7200, 3600, 1800, 1200, 900, 600, 100, 55];
-    private static readonly string[] AlarmLabels = ["2시간", "1시간", "30분", "20분", "15분", "10분", "100초", "55초"];
+    // 알람이 울릴 때 TTS로 읽는 이름 (원본 재획플레이어의 항목명)
+    private static readonly string[] AlarmNames = ["재획비", "경쿠", "경뿌/경쿠/유니온", "유니온 버프", "경쿠", "유니온 버프", "메소 회수", "파운틴"];
 
     private const string CurrentVersion = "v1.1.0";
 
@@ -35,11 +36,20 @@ public partial class Form1 : Form
     {
         InitControls();
 
+        // 저장된 크기는 96dpi 기준(논리 px) 값 → 현재 배율로 환산하고, 화면 작업 영역을 넘지 않게 제한
         if (_config.Width > 0 && _config.Height > 0)
-            Size = new Size(Math.Max(_config.Width, MinimumSize.Width), Math.Max(_config.Height, MinimumSize.Height));
+        {
+            float s = DeviceDpi / 96f;
+            var area = Screen.FromPoint(new Point(_config.X, _config.Y)).WorkingArea;
+            int w = Math.Min(Math.Max((int)(_config.Width * s), MinimumSize.Width), area.Width);
+            int h = Math.Min(Math.Max((int)(_config.Height * s), MinimumSize.Height), area.Height);
+            Size = new Size(w, h);
+        }
 
         if (IsOnScreen(_config.X, _config.Y))
             Location = new Point(_config.X, _config.Y);
+
+        LayoutTitleBar();
 
         // 타이머는 자동 시작 안 함 — 사용자가 timerButton 클릭 시 시작 (ToggleTimer에서만 timer.Start())
 
@@ -255,7 +265,7 @@ public partial class Form1 : Form
             if (!_config.AlarmEnabled[i]) continue;
             if (--_remaining[i] > 0) continue;
             _remaining[i] = AlarmSeconds[i];
-            toFire ??= $"{AlarmLabels[i]} 알람";
+            toFire ??= AlarmNames[i];
         }
 
         for (int i = 0; i < 3; i++)
@@ -275,7 +285,7 @@ public partial class Form1 : Form
     private void FireAlarm(string name)
     {
         if (_config.Tts)
-            Synth.Instance.TTS(name, _config.Volume, _config.Rate);
+            Synth.Instance.TTS(name.Replace("/", ", "), _config.Volume, _config.Rate);
         else
             Synth.Instance.Ring(_config.AlarmName, _config.Volume);
     }
@@ -303,15 +313,33 @@ public partial class Form1 : Form
     }
 
     // 🔴 버그 수정: TopMost=true 상태에서 ShowDialog 호출 시 자식 창이 부모 뒤에 가려지는 문제 → 임시로 false 설정
+    // 우클릭 = 설정창 켜기/끄기 (원본 재획플레이어 동작). 비모달이라 메인 창을 계속 조작할 수 있고,
+    // 이미 열려 있으면 닫는다. 소유자(this)로 띄우므로 항상 위 상태에서도 가려지지 않는다.
+    private AlarmForm? _alarmForm;
+
     private void OpenAlarmSettings()
     {
-        bool wasTopMost = TopMost;
-        TopMost = false;
-        using var form = new AlarmForm();
-        bool ok = form.ShowDialog(this) == DialogResult.OK;
-        TopMost = wasTopMost;
-        if (!ok) return;
+        if (_alarmForm is { IsDisposed: false })
+        {
+            _alarmForm.Close();
+            return;
+        }
 
+        var form = _alarmForm = new AlarmForm();
+        form.FormClosed += (_, _) =>
+        {
+            _alarmForm = null;
+            if (form.Accepted) ApplyAlarmSettings();
+            form.Dispose();
+        };
+        form.StartPosition = FormStartPosition.Manual;
+        form.Show(this);
+        // 배율이 적용된 뒤 크기를 기준으로 메인 창 가운데에 배치 (CenterParent는 배율 적용 전 크기로 계산돼 어긋남)
+        form.Location = new Point(Left + (Width - form.Width) / 2, Top + (Height - form.Height) / 2);
+    }
+
+    private void ApplyAlarmSettings()
+    {
         for (int i = 0; i < 8; i++)
             if (_config.AlarmEnabled[i]) _remaining[i] = AlarmSeconds[i];
         for (int i = 0; i < 3; i++)
@@ -334,21 +362,56 @@ public partial class Form1 : Form
             BackColor = Color.FromArgb(40, 40, 40)
         };
 
+        SiteMenuItem.DeleteZoneWidth = (int)(28 * DeviceDpi / 96f);
         string currentUrl = webView.CoreWebView2?.Source ?? _config.LatestUrl;
 
         // 모든 항목의 폭을 가장 긴 텍스트 기준으로 통일 → ✕ 아이콘이 항상 같은 위치(우측 끝)에 정렬됨
         int textWidth = TextRenderer.MeasureText("＋ 사이트 추가", menu.Font).Width;
         foreach (var site in _config.Sites)
             textWidth = Math.Max(textWidth, TextRenderer.MeasureText(site.Name, menu.Font).Width);
-        textWidth = Math.Max(textWidth, TextRenderer.MeasureText("테두리 숨김 (포커스 아웃)", menu.Font).Width);
-        int itemWidth = textWidth + 70;
+        textWidth = Math.Max(textWidth, TextRenderer.MeasureText("다른 창 선택 시 테두리 안보이기", menu.Font).Width);
+        int itemWidth = textWidth + (int)(70 * DeviceDpi / 96f);
+        int itemHeight = menu.Font.Height + (int)(14 * DeviceDpi / 96f); // AutoSize=false 항목은 높이를 직접 지정해야 배율에서 글자가 잘리지 않는다
+
+        // 원본 재획플레이어와 같은 순서: 항상 위 / 테두리 숨김 → 사이트 목록 → 사이트 추가
+        var topmostItem = new ToolStripMenuItem("항상 위에 표시")
+        {
+            CheckOnClick = true,
+            Checked = _config.TopMost,
+            AutoSize = false,
+            Size = new Size(itemWidth, itemHeight)
+        };
+        topmostItem.CheckedChanged += (_, _) =>
+        {
+            TopMost = topmostItem.Checked;
+            _config.TopMost = TopMost;
+            _config.Save();
+        };
+        menu.Items.Add(topmostItem);
+
+        var hideBorderItem = new ToolStripMenuItem("다른 창 선택 시 테두리 안보이기")
+        {
+            CheckOnClick = true,
+            Checked = _config.IsHideWindowBorderOnFocusOut,
+            AutoSize = false,
+            Size = new Size(itemWidth, itemHeight)
+        };
+        hideBorderItem.CheckedChanged += (_, _) =>
+        {
+            _config.IsHideWindowBorderOnFocusOut = hideBorderItem.Checked;
+            _config.Save();
+        };
+        menu.Items.Add(hideBorderItem);
+
+        if (_config.Sites.Count > 0)
+            menu.Items.Add(new ToolStripSeparator());
 
         foreach (var site in _config.Sites)
         {
             var item = new SiteMenuItem(site)
             {
                 AutoSize = false,
-                Width = itemWidth,
+                Size = new Size(itemWidth, itemHeight),
                 Checked = string.Equals(site.Url, currentUrl, StringComparison.OrdinalIgnoreCase)
             };
             item.Click += (_, _) => NavigateToSite(site);
@@ -361,43 +424,11 @@ public partial class Form1 : Form
             menu.Items.Add(item);
         }
 
-        if (_config.Sites.Count > 0)
-            menu.Items.Add(new ToolStripSeparator());
-
-        var addItem = new ToolStripMenuItem("＋ 사이트 추가") { AutoSize = false, Width = itemWidth };
-        addItem.Click += (_, _) => AddSite();
-        menu.Items.Add(addItem);
-
         menu.Items.Add(new ToolStripSeparator());
 
-        var topmostItem = new ToolStripMenuItem("항상 위")
-        {
-            CheckOnClick = true,
-            Checked = _config.TopMost,
-            AutoSize = false,
-            Width = itemWidth
-        };
-        topmostItem.CheckedChanged += (_, _) =>
-        {
-            TopMost = topmostItem.Checked;
-            _config.TopMost = TopMost;
-            _config.Save();
-        };
-        menu.Items.Add(topmostItem);
-
-        var hideBorderItem = new ToolStripMenuItem("테두리 숨김 (포커스 아웃)")
-        {
-            CheckOnClick = true,
-            Checked = _config.IsHideWindowBorderOnFocusOut,
-            AutoSize = false,
-            Width = itemWidth
-        };
-        hideBorderItem.CheckedChanged += (_, _) =>
-        {
-            _config.IsHideWindowBorderOnFocusOut = hideBorderItem.Checked;
-            _config.Save();
-        };
-        menu.Items.Add(hideBorderItem);
+        var addItem = new ToolStripMenuItem("＋ 사이트 추가") { AutoSize = false, Size = new Size(itemWidth, itemHeight) };
+        addItem.Click += (_, _) => AddSite();
+        menu.Items.Add(addItem);
 
         menu.Show(btnMenu, new Point(0, btnMenu.Height));
     }
@@ -427,7 +458,7 @@ public partial class Form1 : Form
     // 이동 대신 삭제를 수행하도록 OnMouseUp을 가로챈다. SiteMenuRenderer가 그리는 ✕ 아이콘과 짝을 이룸.
     private sealed class SiteMenuItem : ToolStripMenuItem
     {
-        public const int DeleteZoneWidth = 28;
+        public static int DeleteZoneWidth = 28; // OpenSiteMenu()에서 DPI 배율로 갱신
 
         public Site Site { get; }
         public event EventHandler? DeleteRequested;
@@ -495,9 +526,10 @@ public partial class Form1 : Form
     private int TitleBarEdgeHit(Point p)
     {
         if (WindowState != FormWindowState.Normal) return HTCLIENT;
-        bool top = p.Y < ResizeEdge;
-        bool left = p.X < ResizeEdge;
-        bool right = p.X >= pnlTitleBar.Width - ResizeEdge;
+        int edge = (int)(ResizeEdge * DeviceDpi / 96f);
+        bool top = p.Y < edge;
+        bool left = p.X < edge;
+        bool right = p.X >= pnlTitleBar.Width - edge;
         if (top && left) return HTTOPLEFT;
         if (top && right) return HTTOPRIGHT;
         if (top) return HTTOP;
@@ -515,7 +547,7 @@ public partial class Form1 : Form
     // 하단 핸들의 좌우 끝은 모서리(대각선) 리사이즈
     private int BottomEdgeHit(Point p)
     {
-        const int corner = 12;
+        int corner = (int)(12 * DeviceDpi / 96f);
         if (p.X < corner) return HTBOTTOMLEFT;
         if (p.X >= pnlResizeBottom.Width - corner) return HTBOTTOMRIGHT;
         return HTBOTTOM;
@@ -544,10 +576,29 @@ public partial class Form1 : Form
     {
         if (btnMinimize is null || sliderOpacity is null) return;
 
-        const int startX = 136, gap = 8, groupGap = 16, rightPad = 12, minSlider = 60, maxSlider = 170;
+        // 모든 px 값은 96dpi 기준 → 현재 DPI 배율(s)을 곱해 사용
+        float s = DeviceDpi / 96f;
+        int Px(int v) => (int)Math.Round(v * s);
+        int gap = Px(8), groupGap = Px(16), rightPad = Px(12), minSlider = Px(60), maxSlider = Px(170);
+        int h = pnlTitleBar.Height;
 
-        int volLabelW = TextRenderer.MeasureText("볼륨 100", lblVolumeValue.Font).Width + 4;
-        int opaLabelW = TextRenderer.MeasureText("투명도 100%", lblOpacityValue.Font).Width + 4;
+        // 우측 창 버튼: 오른쪽 끝에서부터 닫기 → 최대화 → 최소화 순으로 배치 (세로 가운데)
+        int right = pnlTitleBar.Width;
+        foreach (var b in new[] { btnClose, btnMaximize, btnMinimize })
+        {
+            b.Left = right - b.Width;
+            b.Top = (h - b.Height) / 2;
+            right = b.Left;
+        }
+
+        // 좌측 요소 세로 가운데 정렬
+        btnMenu.Top = (h - btnMenu.Height) / 2;
+        timerButton.Top = (h - timerButton.Height) / 2;
+        lblTitle.Top = (h - lblTitle.Height) / 2;
+
+        int startX = timerButton.Right + Px(16);
+        int volLabelW = TextRenderer.MeasureText("볼륨 100", lblVolumeValue.Font).Width + Px(4);
+        int opaLabelW = TextRenderer.MeasureText("투명도 100%", lblOpacityValue.Font).Width + Px(4);
 
         int limit = btnMinimize.Left - rightPad;
         int available = limit - startX - volLabelW - opaLabelW - gap * 2 - groupGap;
@@ -555,14 +606,18 @@ public partial class Form1 : Form
 
         int x = startX;
         lblVolumeValue.Left = x;
+        lblVolumeValue.Top = (h - lblVolumeValue.Height) / 2;
         x += volLabelW + gap;
         sliderVolume.Left = x;
         sliderVolume.Width = sliderW;
+        sliderVolume.Top = (h - sliderVolume.Height) / 2;
         x += sliderW + groupGap;
         lblOpacityValue.Left = x;
+        lblOpacityValue.Top = (h - lblOpacityValue.Height) / 2;
         x += opaLabelW + gap;
         sliderOpacity.Left = x;
         sliderOpacity.Width = sliderW;
+        sliderOpacity.Top = (h - sliderOpacity.Height) / 2;
     }
 
     // ===== 포커스 아웃 시 테두리 숨김 =====
@@ -588,8 +643,9 @@ public partial class Form1 : Form
         {
             _config.X = Location.X;
             _config.Y = Location.Y;
-            _config.Width = Size.Width;
-            _config.Height = Size.Height;
+            float s = DeviceDpi / 96f;
+            _config.Width = (int)(Size.Width / s);
+            _config.Height = (int)(Size.Height / s);
         }
 
         _config.IsMaximize = WindowState == FormWindowState.Maximized;

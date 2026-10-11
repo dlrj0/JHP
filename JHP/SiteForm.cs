@@ -75,6 +75,10 @@ public class SiteForm : Form
         Controls.AddRange([lblName, _tbName, lblUrl, _tbUrl, btnOk, btnCancel]);
         AcceptButton = btnOk;
         CancelButton = btnCancel;
+
+        // 배율 적용은 자식 컨트롤을 모두 추가한 뒤에 해야 한다. 좌표는 96dpi 기준.
+        AutoScaleDimensions = new SizeF(96F, 96F);
+        AutoScaleMode = AutoScaleMode.Dpi;
     }
 
     private void BtnOk_Click(object? sender, EventArgs e)

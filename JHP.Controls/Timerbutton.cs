@@ -42,20 +42,23 @@ public class TimerButton : Button
         var g = e.Graphics;
         bool hovered = ClientRectangle.Contains(PointToClient(Cursor.Position));
 
-        Color bg = hovered ? Color.FromArgb(60, 60, 60) : Color.Transparent;
+        // 투명 브러시는 더블버퍼(검정)가 그대로 보이므로 부모 배경색으로 칠한다
+        Color bg = hovered ? Color.FromArgb(60, 60, 60) : (Parent?.BackColor ?? Color.FromArgb(28, 28, 28));
         using var bgBrush = new SolidBrush(bg);
         g.FillRectangle(bgBrush, ClientRectangle);
 
         // 동작 중이면 초록색, 정지 상태면 흰색 — 한눈에 "돌고 있다"는 걸 알 수 있게
         Color iconColor = _active ? Color.FromArgb(110, 220, 140) : Color.White;
 
-        int cx = Width / 2, cy = Height / 2, r = 8;
-        using var pen = new Pen(iconColor, 1.6f);
+        float s = DeviceDpi / 96f;
+        int cx = Width / 2, cy = Height / 2, r = (int)Math.Round(8 * s);
+        int hand = (int)Math.Round(2 * s);
+        using var pen = new Pen(iconColor, 1.6f * s);
 
         g.DrawEllipse(pen, cx - r, cy - r, r * 2, r * 2);        // 시계 원
-        g.DrawLine(pen, cx, cy, cx, cy - r + 2);                  // 12시 방향 바늘
-        g.DrawLine(pen, cx, cy, cx + r - 4, cy);                  // 3시 방향 바늘
-        g.DrawLine(pen, cx - 2, cy - r - 2, cx + 2, cy - r - 2);  // 상단 손잡이
+        g.DrawLine(pen, cx, cy, cx, cy - r + hand);                 // 12시 방향 바늘
+        g.DrawLine(pen, cx, cy, cx + r - 2 * hand, cy);                 // 3시 방향 바늘
+        g.DrawLine(pen, cx - hand, cy - r - hand, cx + hand, cy - r - hand);  // 상단 손잡이
     }
 
     protected override void OnMouseUp(MouseEventArgs e)

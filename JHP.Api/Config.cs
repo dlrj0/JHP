@@ -59,7 +59,24 @@ public class Config
             }
         }
         catch { }
-        return new Config();
+
+        // 설정 파일이 없을 때(첫 실행)만 원본 재획플레이어의 기본 사이트 목록을 채워 준다.
+        var config = new Config();
+        if (!File.Exists(ConfigPath))
+        {
+            config.Sites =
+            [
+                new Site { Name = "넷플릭스", Url = "https://www.netflix.com" },
+                new Site { Name = "라프텔", Url = "https://laftel.net" },
+                new Site { Name = "웨이브", Url = "https://www.wavve.com" },
+                new Site { Name = "티빙", Url = "https://www.tving.com" },
+                new Site { Name = "쿠팡플레이", Url = "https://www.coupangplay.com" },
+                new Site { Name = "디즈니플러스", Url = "https://www.disneyplus.com" },
+                new Site { Name = "유튜브", Url = "https://www.youtube.com" },
+            ];
+            config.DefaultSite = "유튜브";
+        }
+        return config;
     }
 
     public void Save()
