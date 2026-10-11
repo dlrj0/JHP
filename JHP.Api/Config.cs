@@ -37,6 +37,7 @@ public class Config
     public bool IsMaximize { get; set; } = false;
     public bool TopMost { get; set; } = false;
     public bool IsHideWindowBorderOnFocusOut { get; set; } = false;
+    public bool MuteVideoOnAlarm { get; set; } = false;
     public List<Site> Sites { get; set; } = [];
     public string DefaultSite { get; set; } = "";
     public bool[] AlarmEnabled { get; set; } = new bool[8];
@@ -141,6 +142,7 @@ public class Config
         IsMaximize = other.IsMaximize;
         TopMost = other.TopMost;
         IsHideWindowBorderOnFocusOut = other.IsHideWindowBorderOnFocusOut;
+        MuteVideoOnAlarm = other.MuteVideoOnAlarm;
         Sites = other.Sites;
         DefaultSite = other.DefaultSite;
         AlarmEnabled = other.AlarmEnabled;

@@ -89,6 +89,7 @@
 | M-1 | GitHub Releases 최신 태그와 비교해 업데이트 알림(버전 비교는 숫자 단위) | ✅ (Release가 없으면 조용히 무시) |
 | M-2 | WebView2 초기화 실패 시 런타임 설치 안내 | ✅ |
 | M-3 | 설정/알람 파일 경로는 exe 위치 기준 | ✅ |
+| M-4 | 알람 울릴 때 영상 음소거(옵션, ▼ 메뉴 '알람 울릴 때 영상 음소거'): 알람 소리/TTS 종료 시 또는 15초 뒤 원래 음소거 상태로 복원, 이미 음소거였다면 유지, 종료 시 복원 | ✅ (원본에 없는 확장) |
 
 ---
 
@@ -153,6 +154,7 @@ JSON, camelCase. 파일이 없으면 기본값 + 기본 사이트 7개.
 | `isMaximize` | bool | false | |
 | `topMost` | bool | false | 항상 위 |
 | `isHideWindowBorderOnFocusOut` | bool | false | 포커스 아웃 시 타이틀바 숨김 |
+| `muteVideoOnAlarm` | bool | false | 알람 울리는 동안 WebView 영상 음소거 |
 | `sites` | `[{name,url}]` | 기본 7개 | |
 | `defaultSite` | string | `""`(첫 실행 시 `유튜브`로 채움) | `latestUrl`이 있으면 그것이 우선 |
 | `alarmEnabled` | bool[8] | 전부 false | 고정 알람 사용 여부 |

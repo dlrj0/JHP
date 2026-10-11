@@ -286,6 +286,7 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 | 창 상태 | 최대화 영역 제한, 복원 글리프, RestoreBounds 저장 | `Form1.cs`, `ControlButton.cs` | `ButtonType.Restore` 추가됨 |
 | 메뉴/툴팁 | 체크 표시 다크화, ✕ 배율, 툴팁 | `DarkMenuRenderer.cs`, `Form1.cs` | |
 | 테스트 | 캡처 전 1.5초 대기(검게 캡처되는 문제) | `tools/ui-test.ps1` | |
+| 알람 음소거 | `Config.MuteVideoOnAlarm`, ▼ 메뉴 체크 항목, `Synth.PlaybackFinished` 이벤트, `FireAlarm`에서 `CoreWebView2.IsMuted` 저장/설정, 종료·15초 안전 타이머로 복원 | `JHP.Api/Synth.cs`, `JHP.Api/Config.cs`, `Form1.cs` | Synth는 교체/Stop 시 이벤트를 내지 않음(취소된 TTS 무시). 콜백은 `BeginInvoke`로 UI 스레드에서 복원 |
 
 현재 검증: 빌드 0 오류, `tools/ui-test.ps1` 전체 통과(메뉴 열림 검사가 드물게 타이밍 때문에 실패 → 재실행 시 통과, 앱 문제 아님).
 

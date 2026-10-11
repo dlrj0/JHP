@@ -37,6 +37,7 @@ public partial class Form1 : Form
         Icon = Program.AppIcon ?? Icon; // 작업 표시줄/Alt+Tab 아이콘 (Form 기본 아이콘 대신 exe에 포함된 앱 아이콘)
         Load += Form1_Load;
         FormClosing += Form1_FormClosing;
+        Synth.Instance.PlaybackFinished += Synth_PlaybackFinished;
         Activated += Form1_Activated;
         Deactivate += Form1_Deactivate;
         SizeChanged += (_, _) => OnWindowStateChanged();
@@ -417,8 +418,63 @@ public partial class Form1 : Form
         UpdateNextAlarmLabel();
     }
 
+    // ===== 알람 울리는 동안 영상 음소거 =====
+    // 알람이 연속으로 울려도 처음 저장한 값만 복원 대상으로 유지해, 사용자가 직접 음소거한 상태를 해제하지 않는다.
+    private bool _alarmMuteActive;
+    private bool _alarmMutePrevious;
+    private System.Windows.Forms.Timer? _alarmMuteSafetyTimer;
+
+    private void MuteVideoForAlarm()
+    {
+        if (!_config.MuteVideoOnAlarm || webView.CoreWebView2 is null) return;
+        try
+        {
+            if (!_alarmMuteActive)
+            {
+                _alarmMutePrevious = webView.CoreWebView2.IsMuted;
+                _alarmMuteActive = true;
+            }
+            webView.CoreWebView2.IsMuted = true;
+
+            // 재생 완료 이벤트가 오지 않는 경우를 대비한 안전 복원 (15초)
+            if (_alarmMuteSafetyTimer is null)
+            {
+                _alarmMuteSafetyTimer = new System.Windows.Forms.Timer { Interval = 15000 };
+                _alarmMuteSafetyTimer.Tick += (_, _) => RestoreVideoMute();
+            }
+            _alarmMuteSafetyTimer.Stop();
+            _alarmMuteSafetyTimer.Start();
+        }
+        catch { }
+    }
+
+    private void RestoreVideoMute()
+    {
+        _alarmMuteSafetyTimer?.Stop();
+        if (!_alarmMuteActive) return;
+        _alarmMuteActive = false;
+        try
+        {
+            if (webView.CoreWebView2 is not null)
+                webView.CoreWebView2.IsMuted = _alarmMutePrevious;
+        }
+        catch { }
+    }
+
+    // Synth 이벤트는 UI 스레드가 아닐 수 있으므로 UI 스레드로 넘겨 복원한다
+    private void Synth_PlaybackFinished()
+    {
+        try
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            BeginInvoke(RestoreVideoMute);
+        }
+        catch { }
+    }
+
     private void FireAlarm(string name)
     {
+        MuteVideoForAlarm();
         if (_config.Tts)
             Synth.Instance.TTS(name.Replace("/", ", "), _config.Volume, _config.Rate);
         else
@@ -524,6 +580,7 @@ public partial class Form1 : Form
         foreach (var site in _config.Sites)
             textWidth = Math.Max(textWidth, TextRenderer.MeasureText(site.Name, menu.Font).Width);
         textWidth = Math.Max(textWidth, TextRenderer.MeasureText("다른 창 선택 시 테두리 안보이기", menu.Font).Width);
+        textWidth = Math.Max(textWidth, TextRenderer.MeasureText("알람 울릴 때 영상 음소거", menu.Font).Width);
         int itemWidth = textWidth + (int)(70 * DeviceDpi / 96f);
         int itemHeight = menu.Font.Height + (int)(14 * DeviceDpi / 96f); // AutoSize=false 항목은 높이를 직접 지정해야 배율에서 글자가 잘리지 않는다
 
@@ -556,6 +613,20 @@ public partial class Form1 : Form
             _config.Save();
         };
         menu.Items.Add(hideBorderItem);
+
+        var muteItem = new ToolStripMenuItem("알람 울릴 때 영상 음소거")
+        {
+            CheckOnClick = true,
+            Checked = _config.MuteVideoOnAlarm,
+            AutoSize = false,
+            Size = new Size(itemWidth, itemHeight)
+        };
+        muteItem.CheckedChanged += (_, _) =>
+        {
+            _config.MuteVideoOnAlarm = muteItem.Checked;
+            _config.Save();
+        };
+        menu.Items.Add(muteItem);
 
         if (_config.Sites.Count > 0)
             menu.Items.Add(new ToolStripSeparator());
@@ -811,7 +882,11 @@ public partial class Form1 : Form
     private void Form1_FormClosing(object? sender, FormClosingEventArgs e)
     {
         timer.Stop();
+        Synth.Instance.PlaybackFinished -= Synth_PlaybackFinished;
         Synth.Instance.Stop();
+        RestoreVideoMute(); // 종료 시 음소거 상태를 남기지 않는다
+        _alarmMuteSafetyTimer?.Dispose();
+        _alarmMuteSafetyTimer = null;
 
         // 최대화/최소화 상태에서도 일반 크기의 위치/크기(RestoreBounds)를 저장한다
         var bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
