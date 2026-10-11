@@ -288,6 +288,7 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 | 테스트 | 캡처 전 1.5초 대기(검게 캡처되는 문제) | `tools/ui-test.ps1` | |
 | 사이트 관리 | ▼ 메뉴 사이트 항목 우클릭 → 이동/수정/시작 사이트 지정 (`SiteListOps` 순수 함수, `SiteForm(Site?)` 오버로드, 비활성 항목 색) | `JHP.Api/Site.cs`, `JHP/Form1.cs`, `JHP/SiteForm.cs`, `JHP.Controls/DarkMenuRenderer.cs` | 시작 사이트는 `LatestUrl`이 없을 때만 쓰임(마지막 주소 우선 규칙 불변). 팝업이라 UI 자동 테스트 미검증 → 육안 확인 필요 |
 | 알람 음소거 | `Config.MuteVideoOnAlarm`, ▼ 메뉴 체크 항목, `Synth.PlaybackFinished` 이벤트, `FireAlarm`에서 `CoreWebView2.IsMuted` 저장/설정, 종료·15초 안전 타이머로 복원 | `JHP.Api/Synth.cs`, `JHP.Api/Config.cs`, `Form1.cs` | Synth는 교체/Stop 시 이벤트를 내지 않음(취소된 TTS 무시). 콜백은 `BeginInvoke`로 UI 스레드에서 복원 |
+| 테스트 확장 | 타이머 버튼 활성/비활성 색(PrintWindow 픽셀), 슬라이더 양 끝(투명도 30%/100%, 볼륨 0/100), 숫자 라벨 인라인 입력(WM_CHAR 즉시 반영·Esc 복원), 알람 설정창 확인/취소의 config.json 반영, 포커스 아웃 옵션(WM_ACTIVATE 합성). 각 검사는 `Run-Safe`로 UIA 오류 시 SKIP | `tools/ui-test.ps1` | 앱 코드는 바꾸지 않음. 통과 개수는 스크립트 출력으로 확인 |
 
 현재 검증: 빌드 0 오류, `tools/ui-test.ps1` 전체 통과(메뉴 열림 검사가 드물게 타이밍 때문에 실패 → 재실행 시 통과, 앱 문제 아님).
 

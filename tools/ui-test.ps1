@@ -96,7 +96,8 @@ function Get-Elements([IntPtr]$h, [switch]$NoHandleOk) {
     $root = [System.Windows.Automation.AutomationElement]::FromHandle($h)
     $all = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
     foreach ($e in $all) {
-        $c = $e.Current
+        # 레이아웃이 바뀌는 중에 요소가 사라질 수 있으므로 읽기 실패는 건너뛴다
+        try { $c = $e.Current; if ($null -eq $c -or $null -eq $c.ControlType) { continue } } catch { continue }
         # WebView2(Chromium) 내부 요소는 HWND가 없다 → 우리 WinForms 컨트롤만 남긴다. (메뉴 항목처럼 HWND가 없는 항목은 -NoHandleOk)
         if (-not $NoHandleOk -and $c.NativeWindowHandle -eq 0) { continue }
         [pscustomobject]@{ El = $e; Name = $c.Name; Type = $c.ControlType.ProgrammaticName.Replace('ControlType.', ''); Class = $c.ClassName
@@ -139,6 +140,52 @@ function Find-ProcWindow([string]$title, [int]$timeoutMs = 4000) {
     }
     return [IntPtr]::Zero
 }
+function Run-Safe([string]$name, [scriptblock]$body) {
+    # UI Automation 시간 초과 등 예외가 한 검사에서 나도 전체 테스트가 중단되지 않게 한다(해당 검사는 SKIP 처리).
+    try { & $body }
+    catch { Write-Host "  [SKIP] $name : $($_.Exception.Message)" }
+}
+function Get-TitleParts {
+    $wr = Get-Rect $main
+    $e = Get-Elements $main
+    $lb = @($e | Where-Object { $_.Type -eq 'Text' -and ($_.Name -like '볼륨*' -or $_.Name -like '투명도*') } | Sort-Object L)
+    $sl = @($e | Where-Object { $_.Type -eq 'Pane' -and $_.H -gt 0 -and $_.H -lt 80 -and $_.W -gt 60 -and $_.W -lt 700 -and $_.T -lt ($wr.T + 100) } | Sort-Object L)
+    if ($lb.Count -ne 2 -or $sl.Count -lt 2) { throw "title parts not found: labels=$($lb.Count) sliders=$($sl.Count)" }
+    [pscustomobject]@{ VolLabel = $lb[0]; OpaLabel = $lb[1]; VolSlider = $sl[0]; OpaSlider = $sl[1] }
+}
+function Get-LabelText([string]$pattern) {
+    (Get-Elements $main | Where-Object { $_.Type -eq 'Text' -and $_.Name -like $pattern } | Select-Object -First 1).Name
+}
+function Wait-Colors([IntPtr]$h, $el, $winRect, [scriptblock]$until, [int]$timeoutMs = 2500) {
+    # 조건($until: $_ = Green/White 개수)을 만족할 때까지 다시 그려진 화면을 읽는다. 시간이 지나도 안 되면 마지막 값을 돌려준다.
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    do {
+        $r = Count-Colors $h $el $winRect
+        if ($r | Where-Object $until) { return $r }
+    } while ($sw.ElapsedMilliseconds -lt $timeoutMs)
+    $r
+}
+function Count-Colors([IntPtr]$h, $el, $winRect) {
+    # el 영역(화면 좌표)을 PrintWindow 비트맵에서 읽어 초록/흰색 픽셀 수를 센다.
+    $r = Get-Rect $h; $w = $r.R - $r.L; $ht = $r.B - $r.T
+    $bmp = New-Object System.Drawing.Bitmap $w, $ht
+    $g = [System.Drawing.Graphics]::FromImage($bmp); $hdc = $g.GetHdc()
+    Start-Sleep -Milliseconds 300
+    [Win]::PrintWindow($h, $hdc, 2) | Out-Null
+    $g.ReleaseHdc($hdc); $g.Dispose()
+    $x0 = [Math]::Max(0, $el.L - $r.L); $y0 = [Math]::Max(0, $el.T - $r.T)
+    $x1 = [Math]::Min($w, $x0 + $el.W); $y1 = [Math]::Min($ht, $y0 + $el.H)
+    $green = 0; $white = 0
+    for ($y = $y0; $y -lt $y1; $y++) {
+        for ($x = $x0; $x -lt $x1; $x++) {
+            $c = $bmp.GetPixel($x, $y)
+            if ($c.G -ge 190 -and $c.R -le 170 -and $c.B -le 190 -and ($c.G - $c.R) -ge 50) { $green++ }
+            elseif ($c.R -ge 235 -and $c.G -ge 235 -and $c.B -ge 235) { $white++ }
+        }
+    }
+    $bmp.Dispose()
+    [pscustomobject]@{ Green = $green; White = $white }
+}
 
 try {
     # ---------- 1. 타이틀바 레이아웃 ----------
@@ -180,6 +227,84 @@ try {
     Test-NoOverlap 'volume100'
     Save-Window $main '03-volume100' | Out-Null
 
+    # ---------- 3-1. 타이머 버튼 활성/비활성 색 (스펙 T-1) ----------
+    # 활성 아이콘은 초록(110,220,140), 비활성은 흰색. UIA Invoke로 Click을 보내고 PrintWindow 픽셀로 확인한다.
+    Run-Safe 'timer-color' {
+        $tb = ((Get-Elements $main) | Where-Object { $_.Type -eq 'Button' } | Sort-Object L)[1]
+        $wr = Get-Rect $main
+        $before = Count-Colors $main $tb $wr
+        Invoke-El $tb
+        $running = Wait-Colors $main $tb $wr { $_.Green -ge 5 }
+        Check 'timer: 시작하면 아이콘이 활성(초록) 색으로 바뀜' ($before.Green -eq 0 -and $running.Green -ge 5) ("stopped green=$($before.Green) white=$($before.White) / running green=$($running.Green) white=$($running.White)")
+        Invoke-El $tb
+        $stopped = Wait-Colors $main $tb $wr { $_.Green -eq 0 -and $_.White -ge 5 }
+        Check 'timer: 다시 누르면 정지하며 비활성(흰색) 색으로 돌아감' ($stopped.Green -eq 0 -and $stopped.White -ge 5) ("green=$($stopped.Green) white=$($stopped.White)")
+    }
+
+    # ---------- 3-2. 투명도 슬라이더 양 끝 / 볼륨 0 ----------
+    Run-Safe 'slider-ends' {
+      try {
+        $tp = Get-TitleParts
+        Send-Mouse $tp.OpaSlider 'ldown' 0.0 0.5; Send-Mouse $tp.OpaSlider 'lup' 0.0 0.5
+        $t = Get-LabelText '투명도*'
+        Check 'slider: 투명도 슬라이더 왼쪽 끝 클릭 → 투명도 30%' ($t -eq '투명도 30%') "label='$t'"
+        Send-Mouse $tp.OpaSlider 'ldown' 1.0 0.5; Send-Mouse $tp.OpaSlider 'lup' 1.0 0.5
+        $t = Get-LabelText '투명도*'
+        Check 'slider: 투명도 슬라이더 오른쪽 끝 클릭 → 투명도 100%' ($t -eq '투명도 100%') "label='$t'"
+        Send-Mouse $tp.VolSlider 'ldown' 0.0 0.5; Send-Mouse $tp.VolSlider 'lup' 0.0 0.5
+        $t = Get-LabelText '볼륨*'
+        Check 'slider: 볼륨 슬라이더 왼쪽 끝 클릭 → 볼륨 0' ($t -eq '볼륨 0') "label='$t'"
+        Send-Mouse $tp.VolSlider 'ldown' 1.0 0.5; Send-Mouse $tp.VolSlider 'lup' 1.0 0.5   # 이후 종료 저장 검사를 위해 100으로 되돌림
+        $t = Get-LabelText '볼륨*'
+        Check 'slider: 볼륨 슬라이더 오른쪽 끝 클릭 → 볼륨 100(복원)' ($t -eq '볼륨 100') "label='$t'"
+      }
+      finally {   # 중간에 실패해도 이후 검사(종료 저장 볼륨 100)를 위해 양쪽 슬라이더를 오른쪽 끝으로 되돌림
+        try { $tp = Get-TitleParts; foreach ($sl in $tp.VolSlider, $tp.OpaSlider) { Send-Mouse $sl 'ldown' 1.0 0.5; Send-Mouse $sl 'lup' 1.0 0.5 } } catch { }
+      }
+    }
+
+    # ---------- 3-3. 숫자 라벨 클릭 → 인라인 입력 칸 / 즉시 반영 / Esc 복원 ----------
+    function Test-InlineEdit([string]$labelPattern, [string]$prefix, [string]$suffix, [string]$original, [int[]]$steps) {
+        # $steps: 입력할 문자 목록(ASCII). 마지막 두 글자까지 입력한 뒤 값을 확인한다.
+        $tp = Get-TitleParts
+        $lbl = if ($labelPattern -like '볼륨*') { $tp.VolLabel } else { $tp.OpaLabel }
+        Send-Mouse $lbl 'ldown' 0.5 0.5; Send-Mouse $lbl 'lup' 0.5 0.5
+        $edit = $null
+        for ($try = 0; $try -lt 8 -and $null -eq $edit; $try++) {   # 입력 칸이 뜰 때까지 잠깐 기다림(타이밍 편차)
+            if ($try -gt 0) { Start-Sleep -Milliseconds 200 }
+            $edit = (Get-Elements $main) | Where-Object { $_.Type -eq 'Edit' -and [Win]::IsWindowVisible($_.Hwnd) } | Select-Object -First 1
+        }
+        Check "inline[$prefix]: 라벨을 클릭하면 입력 칸(Edit)이 나타남" ($null -ne $edit)
+        if ($null -eq $edit) { return }
+        $initText = ''
+        try { $initText = $edit.El.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { }
+        Check "inline[$prefix]: 입력 칸에 현재 값이 채워짐" ($initText -eq ($original -replace '\D', '')) "text='$initText' expected=$original"
+        # 기존 글자를 지우고(Backspace) 한 글자씩 입력 — WM_CHAR로 보내므로 실제 키보드/포커스를 쓰지 않는다
+        1..5 | ForEach-Object { [Win]::SendMessage($edit.Hwnd, 0x0102, [IntPtr]8, [IntPtr]::Zero) | Out-Null }
+        $seq = @()
+        foreach ($ch in $steps) {
+            [Win]::SendMessage($edit.Hwnd, 0x0102, [IntPtr]$ch, [IntPtr]::Zero) | Out-Null
+            Start-Sleep -Milliseconds 120
+            $seq += (Get-LabelText $labelPattern)
+        }
+        $script:inlineSeq = $seq
+        # Esc (WM_KEYDOWN VK_ESCAPE)
+        [Win]::SendMessage($edit.Hwnd, 0x0100, [IntPtr]0x1B, [IntPtr]::Zero) | Out-Null
+        Start-Sleep -Milliseconds 300
+        $after = Get-LabelText $labelPattern
+        $hidden = -not [Win]::IsWindowVisible($edit.Hwnd)
+        Check "inline[$prefix]: Esc로 원래 값 복원하고 입력 칸이 사라짐" ($after -eq "$prefix$original$suffix" -and $hidden) "label='$after' editHidden=$hidden"
+    }
+    Run-Safe 'inline-volume' {
+        Test-InlineEdit '볼륨*' '볼륨 ' '' '100' @(55, 48)   # '7', '0'
+        Check 'inline[볼륨 ]: 입력 즉시 라벨이 바뀜 (7 → 볼륨 7, 70 → 볼륨 70)' ($script:inlineSeq[0] -eq '볼륨 7' -and $script:inlineSeq[1] -eq '볼륨 70') ("seq=" + ($script:inlineSeq -join ' | '))
+    }
+    Run-Safe 'inline-opacity' {
+        Test-InlineEdit '투명도*' '투명도 ' '%' '100' @(53, 48)   # '5', '0'
+        # 5는 최솟값(30) 미만이라 입력 중간 상태로 두고, 50이 되는 순간 반영된다 (Form1.ApplyInlineEditLive 주석)
+        Check 'inline[투명도 ]: 범위 밖 중간 입력(5)은 반영하지 않고 50에서 반영' ($script:inlineSeq[1] -eq '투명도 50%' -and $script:inlineSeq[0] -ne '투명도 5%') ("seq=" + ($script:inlineSeq -join ' | '))
+    }
+
     # ---------- 4. 창 크기: 좁게 / 최대화 ----------
     $minW = [int](760 * ($winRect.R - $winRect.L) / 800)   # 기본 폭(800 논리 px) 대비 배율을 추정해 최소 폭 계산
     [Win]::SetWindowPos($main, [IntPtr]::Zero, 0, 0, $minW, 700, 0x0002 -bor 0x0004 -bor 0x0010) | Out-Null  # NOMOVE|NOZORDER|NOACTIVATE
@@ -214,6 +339,97 @@ try {
         Check 'alarm: 같은 버튼 우클릭으로 닫힘(토글)' ($again -eq [IntPtr]::Zero)
     }
 
+    # ---------- 5-1. 알람 설정창: 값 변경 후 확인/취소 ----------
+    # 확인(Invoke) → config.json에 즉시 반영, 취소 → 반영 안 됨. 최종 값은 종료 후에도 다시 확인한다(8번).
+    $script:alarmExpect = $null
+    function Open-AlarmForm {
+        $tb = ((Get-Elements $main) | Where-Object { $_.Type -eq 'Button' } | Sort-Object L)[1]
+        Send-Mouse $tb 'rdown'; Send-Mouse $tb 'rup'
+        $h = Find-ProcWindow '알람 설정'
+        if ($h -eq [IntPtr]::Zero) { throw 'alarm window did not open' }
+        Start-Sleep -Milliseconds 900
+        $h
+    }
+    function Get-AlarmControls([IntPtr]$h) {
+        $ae = @(Get-Elements $h)
+        # UIA 이름: 커스텀 알람 체크박스는 옆 라벨('커스텀 알람'/'초')이 이름이 되고, 이름 칸은 '', 초 칸의 Edit는 '회전자'
+        $nameEdits = @($ae | Where-Object { $_.Type -eq 'Edit' -and [string]::IsNullOrEmpty($_.Name) } | Sort-Object T)
+        $tickEdits = @($ae | Where-Object { $_.Type -eq 'Edit' -and $_.Name -eq '회전자' } | Sort-Object T)
+        [pscustomobject]@{
+            Check1   = $ae | Where-Object { $_.Type -eq 'CheckBox' -and $_.Name -eq '재획비 (2시간)' } | Select-Object -First 1
+            Check2   = $ae | Where-Object { $_.Type -eq 'CheckBox' -and $_.Name -eq '경쿠 (1시간)' } | Select-Object -First 1
+            Customs  = @($ae | Where-Object { $_.Type -eq 'CheckBox' -and ($_.Name -eq '커스텀 알람' -or $_.Name -eq '초') } | Sort-Object T)
+            NameEdits = $nameEdits
+            TickEdits = $tickEdits
+            Ok       = $ae | Where-Object { $_.Type -eq 'Button' -and $_.Name -eq '확인' } | Select-Object -First 1
+            Cancel   = $ae | Where-Object { $_.Type -eq 'Button' -and $_.Name -eq '취소' } | Select-Object -First 1
+        }
+    }
+    function Set-Toggle($el) {
+        try { $el.El.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle() }
+        catch { throw "Toggle 실패 ($($el.Type) '$($el.Name)'): $($_.Exception.Message)" }
+        Start-Sleep -Milliseconds 150
+    }
+    function Get-Toggle($el) { $el.El.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Current.ToggleState }
+    function Set-EditValue($el, [string]$v) {
+        try { $el.El.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($v) }
+        catch { throw "SetValue 실패 ($($el.Type) '$($el.Name)' $($el.Class)): $($_.Exception.Message)" }
+        Start-Sleep -Milliseconds 150
+    }
+    function Read-Cfg { $p = Join-Path $app 'config.json'; if (Test-Path $p) { Get-Content $p -Raw -Encoding UTF8 | ConvertFrom-Json } else { $null } }
+
+    Run-Safe 'alarm-confirm' {
+        $h = Open-AlarmForm
+        $c = Get-AlarmControls $h
+        if (-not $c.Check1 -or -not $c.Check2 -or $c.Customs.Count -ne 3 -or $c.NameEdits.Count -ne 3 -or $c.TickEdits.Count -ne 3 -or -not $c.Ok -or -not $c.Cancel) {
+            throw "alarm controls not found: c1=$([bool]$c.Check1) c2=$([bool]$c.Check2) customs=$($c.Customs.Count) nameEdits=$($c.NameEdits.Count) tickEdits=$($c.TickEdits.Count) ok=$([bool]$c.Ok) cancel=$([bool]$c.Cancel)"
+        }
+        $init1 = Get-Toggle $c.Check1
+        Set-Toggle $c.Check1                                # 재획비(2시간) 켜기
+        Set-Toggle $c.Customs[0]                            # 커스텀 알람 1 켜기
+        Set-EditValue $c.NameEdits[0] 'UI테스트'
+        Set-EditValue $c.TickEdits[0] '123'
+        Invoke-El $c.Ok
+        Start-Sleep -Milliseconds 600
+        $closed = (Find-ProcWindow '알람 설정' 1000) -eq [IntPtr]::Zero
+        Check 'alarm-confirm: 확인을 누르면 설정창이 닫힘' $closed
+        $cfg = Read-Cfg
+        $ok = $null -ne $cfg -and $cfg.alarmEnabled[0] -eq $true -and $cfg.customAlarms[0].enabled -eq $true -and $cfg.customAlarms[0].tick -eq 123 -and $cfg.customAlarms[0].name -eq 'UI테스트'
+        $detail = if ($null -eq $cfg) { 'config.json 없음' } else { "init1=$init1 alarmEnabled[0]=$($cfg.alarmEnabled[0]) custom0=enabled:$($cfg.customAlarms[0].enabled) tick:$($cfg.customAlarms[0].tick) name:$($cfg.customAlarms[0].name)" }
+        Check 'alarm-confirm: 확인 → config.json에 알람 체크/커스텀 알람 값이 반영됨' $ok $detail
+        $script:alarmExpect = $true
+    }
+
+    function Close-AlarmIfOpen {
+        $h = Find-ProcWindow '알람 설정' 600
+        if ($h -ne [IntPtr]::Zero) { [Win]::PostMessage($h, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null; Start-Sleep -Milliseconds 500 }
+    }
+    Close-AlarmIfOpen
+    Run-Safe 'alarm-cancel' {
+        $h = Open-AlarmForm
+        $c = Get-AlarmControls $h
+        if (-not $c.Check2 -or $c.TickEdits.Count -ne 3 -or -not $c.Cancel) { throw "alarm controls not found (tickEdits=$($c.TickEdits.Count))" }
+        $before = Read-Cfg
+        Set-Toggle $c.Check2                                # 경쿠(1시간) 켜기 (취소할 것)
+        Set-EditValue $c.TickEdits[0] '456'
+        Invoke-El $c.Cancel
+        Start-Sleep -Milliseconds 600
+        $closed = (Find-ProcWindow '알람 설정' 1000) -eq [IntPtr]::Zero
+        Check 'alarm-cancel: 취소를 누르면 설정창이 닫힘' $closed
+        $cfg = Read-Cfg
+        $ok = $null -ne $cfg -and $cfg.alarmEnabled[1] -eq $before.alarmEnabled[1] -and $cfg.customAlarms[0].tick -eq $before.customAlarms[0].tick
+        Check 'alarm-cancel: 취소 → config.json에 변경이 반영되지 않음' $ok ("alarmEnabled[1]=$($cfg.alarmEnabled[1]) (before=$($before.alarmEnabled[1])) custom0.tick=$($cfg.customAlarms[0].tick)")
+        # 취소한 값이 다음에 열 때도 남아있지 않은지 (창이 이전 입력을 기억하지 않음)
+        $h2 = Open-AlarmForm
+        $c2 = Get-AlarmControls $h2
+        $t = if ($c2.Check2) { Get-Toggle $c2.Check2 } else { 'n/a' }
+        Check 'alarm-cancel: 다시 열면 취소한 값이 아닌 저장된 값이 표시됨' ($t -eq 'Off') "경쿠(1시간) toggle=$t"
+        [Win]::PostMessage($h2, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null   # WM_CLOSE (Accepted=false)
+        Start-Sleep -Milliseconds 500
+    }
+
+    Close-AlarmIfOpen
+
     # ---------- 6. ▼ 메뉴 ----------
     if (-not $IncludeMenu) { Write-Host '[SKIP] menu/site: 팝업이 사용자 화면에 보일 수 있어 기본은 건너뜀 (-IncludeMenu로 실행)' }
     else {
@@ -233,8 +449,8 @@ try {
     if ($popup -ne [IntPtr]::Zero) {
         $me = Get-Elements $popup -NoHandleOk
         $names = ($me | Where-Object { $_.Name } | ForEach-Object { $_.Name })
-        foreach ($want in '항상 위에 표시', '다른 창 선택 시 테두리 안보이기', '넷플릭스', '라프텔', '웨이브', '티빙', '쿠팡플레이', '디즈니플러스', '유튜브', '＋ 사이트 추가') {
-            Check "menu: '$want' 항목" ($names -contains $want)
+        foreach ($want in '항상 위에 표시', '다른 창 선택 시 테두리 안보이기', '알람 울릴 때 영상 음소거', '넷플릭스', '라프텔', '웨이브', '티빙', '쿠팡플레이', '디즈니플러스', '유튜브', '＋ 사이트 추가') {
+            Check "menu: '$want' 항목" (($names -contains $want) -or ($names -contains "$want (시작)"))   # 시작 사이트는 이름 뒤에 (시작)이 붙는다
         }
         Save-Window $popup '06-menu' | Out-Null
         $add = $me | Where-Object { $_.Name -eq '＋ 사이트 추가' } | Select-Object -First 1
@@ -281,6 +497,83 @@ try {
     $cfgText = if (Test-Path $cfgPath) { Get-Content $cfgPath -Raw -Encoding UTF8 } else { '' }
     Check 'close: 종료 시 config.json에 볼륨 100 저장' ($cfgText -match '"volume":\s*100') ($cfgText.Length.ToString() + ' bytes')
     Check 'close: 종료 시 사이트 목록 7개 저장' ((([regex]::Matches($cfgText, '"url":')).Count) -eq 7)
+
+    if ($script:alarmExpect) {
+        Run-Safe 'close-alarm' {
+            $cfg = $cfgText | ConvertFrom-Json
+            $ok = $cfg.alarmEnabled[0] -eq $true -and $cfg.customAlarms[0].enabled -eq $true -and $cfg.customAlarms[0].tick -eq 123 -and $cfg.customAlarms[0].name -eq 'UI테스트'
+            Check 'close: 종료 후 config.json에 확인한 알람 설정이 남아 있고 취소한 값은 없음' $ok "alarmEnabled=$($cfg.alarmEnabled -join ',') custom0.tick=$($cfg.customAlarms[0].tick)"
+        }
+    }
+    else { Write-Host '[SKIP] close: 알람 설정 반영 확인 — 앞의 알람 확인 검사가 실행되지 않음' }
+
+    # ---------- 8-1. 포커스 아웃 옵션 (WM_ACTIVATE 메시지로 합성, 사용자 포커스는 건드리지 않음) ----------
+    Run-Safe 'focusout' {
+        $cfgFile = Join-Path $app 'config.json'
+        $txt = Get-Content $cfgFile -Raw -Encoding UTF8
+        if ($txt -notmatch '"isHideWindowBorderOnFocusOut":\s*false') { throw 'isHideWindowBorderOnFocusOut 항목을 찾지 못함' }
+        Set-Content -LiteralPath $cfgFile -Value ($txt -replace '"isHideWindowBorderOnFocusOut":\s*false', '"isHideWindowBorderOnFocusOut": true') -Encoding UTF8
+        if (-not $KeepOnScreen) { $env:JHP_OFFSCREEN = '1' }
+        $p3 = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
+        Remove-Item Env:\JHP_OFFSCREEN -ErrorAction SilentlyContinue
+        try {
+            $m3 = [IntPtr]::Zero
+            for ($i = 0; $i -lt 60; $i++) { Start-Sleep -Milliseconds 250; $p3.Refresh(); if ($p3.MainWindowHandle -ne [IntPtr]::Zero) { $m3 = $p3.MainWindowHandle; break } }
+            if ($m3 -eq [IntPtr]::Zero) { throw 'focusout 인스턴스의 창을 찾지 못함' }
+            if (-not $KeepOnScreen) { [Win]::SetWindowPos($m3, [IntPtr]::Zero, -20000, 0, 0, 0, 0x0001 -bor 0x0004 -bor 0x0010) | Out-Null }
+            Start-Sleep -Milliseconds 2500
+            $btns = @()
+            for ($try = 0; $try -lt 12 -and $btns.Count -lt 5; $try++) {   # 창이 준비될 때까지 기다림. 프로세스의 최상위 창 중 타이틀바 버튼이 5개인 창을 메인으로 본다
+                if ($try -gt 0) { Start-Sleep -Milliseconds 500 }
+                foreach ($cand in (@($m3) + @([Win]::TopWindows([uint32]$p3.Id)))) {
+                    $found = @(([System.Windows.Automation.AutomationElement]::FromHandle($cand)).FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                        (New-Object System.Windows.Automation.PropertyCondition ([System.Windows.Automation.AutomationElement]::ControlTypeProperty), ([System.Windows.Automation.ControlType]::Button))) |
+                        Where-Object { $_.Current.NativeWindowHandle -ne 0 } | Sort-Object { $_.Current.BoundingRectangle.Left })
+                    if ($found.Count -ge 5) { $btns = $found; $m3 = $cand; break }
+                }
+            }
+            if ($btns.Count -lt 5) { throw "title bar buttons=$($btns.Count)" }
+            $minH = [IntPtr]$btns[2].Current.NativeWindowHandle   # 타이틀바 안의 버튼(최소화)으로 타이틀바 표시 여부를 본다
+            $WM_ACTIVATE = 0x0006; $WM_ACTIVATEAPP = 0x001C
+            [Win]::SendMessage($m3, $WM_ACTIVATE, [IntPtr]1, [IntPtr]::Zero) | Out-Null          # WA_ACTIVE
+            Start-Sleep -Milliseconds 300
+            $shown0 = [Win]::IsWindowVisible($minH)
+            [Win]::SendMessage($m3, $WM_ACTIVATE, [IntPtr]0, [IntPtr]::Zero) | Out-Null          # WA_INACTIVE
+            Start-Sleep -Milliseconds 400
+            $hidden = -not [Win]::IsWindowVisible($minH)
+            Check 'focusout: 옵션 켠 상태에서 창이 비활성화되면 타이틀바가 숨겨짐' ($shown0 -and $hidden) "visibleBefore=$shown0 hiddenAfterDeactivate=$hidden"
+            [Win]::SendMessage($m3, $WM_ACTIVATE, [IntPtr]1, [IntPtr]::Zero) | Out-Null
+            Start-Sleep -Milliseconds 400
+            $back = [Win]::IsWindowVisible($minH)
+            Check 'focusout: 다시 활성화되면 타이틀바가 다시 보임' $back "visible=$back"
+            # 알람 설정창이 떠 있는 동안에는 비활성화돼도 숨기지 않는다
+            $pnlTimer = [IntPtr]$btns[1].Current.NativeWindowHandle
+            $lp = [IntPtr]((5 -shl 16) -bor 5)
+            [Win]::SendMessage($pnlTimer, 0x0204, [IntPtr]2, $lp) | Out-Null; [Win]::SendMessage($pnlTimer, 0x0205, [IntPtr]::Zero, $lp) | Out-Null
+            $sw = [Diagnostics.Stopwatch]::StartNew(); $af = [IntPtr]::Zero
+            while ($sw.ElapsedMilliseconds -lt 4000 -and $af -eq [IntPtr]::Zero) {
+                foreach ($hh in [Win]::TopWindows([uint32]$p3.Id)) { $sb = New-Object System.Text.StringBuilder 64; [Win]::GetWindowText($hh, $sb, 64) | Out-Null; if ($sb.ToString() -eq '알람 설정') { $af = $hh } }
+                Start-Sleep -Milliseconds 200
+            }
+            if ($af -ne [IntPtr]::Zero) {
+                Start-Sleep -Milliseconds 400
+                [Win]::SendMessage($m3, $WM_ACTIVATE, [IntPtr]0, [IntPtr]::Zero) | Out-Null
+                Start-Sleep -Milliseconds 400
+                $still = [Win]::IsWindowVisible($minH)
+                Check 'focusout: 알람 설정창이 열려 있는 동안에는 타이틀바를 숨기지 않음' $still "visible=$still"
+                [Win]::PostMessage($af, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+                Start-Sleep -Milliseconds 400
+            }
+            else { Write-Host '[SKIP] focusout: 알람 설정창을 열지 못해 "설정창 열린 동안 유지" 검사를 건너뜀' }
+        }
+        finally {
+            if (-not $p3.HasExited) {
+                [Win]::PostMessage($p3.MainWindowHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+                $p3.WaitForExit(8000) | Out-Null
+                if (-not $p3.HasExited) { $p3.Kill() }
+            }
+        }
+    }
 
     # ---------- 9. 손상된 설정 파일로 시작 ----------
     Set-Content -LiteralPath $cfgPath -Value '{ "volume": 999, "alarmEnabled": [true], "customAlarms": [], "sites": null, ' -Encoding UTF8
