@@ -17,7 +17,10 @@ public static class UpdateChecker
 
             string latest = release.TagName.TrimStart('v');
             string current = currentVersion.TrimStart('v');
-            bool hasUpdate = string.Compare(latest, current, StringComparison.OrdinalIgnoreCase) > 0;
+            // 문자열 비교는 "1.10.0" < "1.9.0"으로 판정되므로 Version으로 비교하고, 파싱 실패 시에만 문자열 비교로 대체
+            bool hasUpdate = Version.TryParse(latest, out var latestVer) && Version.TryParse(current, out var currentVer)
+                ? latestVer > currentVer
+                : string.Compare(latest, current, StringComparison.OrdinalIgnoreCase) > 0;
 
             return (hasUpdate, release.TagName, release.HtmlUrl);
         }

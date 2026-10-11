@@ -7,7 +7,7 @@ public class Config
 {
     private static Config? _instance;
     private static readonly object _lock = new();
-    private static readonly string ConfigPath = "config.json";
+    private static readonly string ConfigPath = Path.Combine(AppContext.BaseDirectory, "config.json");
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

@@ -28,7 +28,8 @@ public class Synth
         try
         {
             Stop();
-            string path = Path.Combine("alarm", alarmName);
+            // 작업 디렉터리가 아니라 exe 위치 기준 (바로가기 실행 시에도 alarm 폴더를 찾도록)
+            string path = Path.Combine(AppContext.BaseDirectory, "alarm", alarmName);
             if (!File.Exists(path)) return;
 
             _audioFileReader = new AudioFileReader(path) { Volume = volume / 100f };

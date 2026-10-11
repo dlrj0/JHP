@@ -246,12 +246,16 @@ public partial class Form1 : Form
         // 정지 상태면 Tick 무시 (이중 안전장치)
         if (!_timerRunning) return;
 
+        // 같은 순간에 여러 알람이 겹치면(예: 2시간 시점에 1시간/30분/... 동시 도달) 목록 위쪽 하나만 울린다.
+        // 모든 알람의 남은 시간은 각자 정상적으로 갱신/리셋한다.
+        string? toFire = null;
+
         for (int i = 0; i < 8; i++)
         {
             if (!_config.AlarmEnabled[i]) continue;
             if (--_remaining[i] > 0) continue;
             _remaining[i] = AlarmSeconds[i];
-            FireAlarm($"{AlarmLabels[i]} 알람");
+            toFire ??= $"{AlarmLabels[i]} 알람";
         }
 
         for (int i = 0; i < 3; i++)
@@ -260,8 +264,10 @@ public partial class Form1 : Form
             if (!alarm.Enabled || alarm.Tick <= 0) continue;
             if (--_customRemaining[i] > 0) continue;
             _customRemaining[i] = alarm.Tick;
-            FireAlarm(string.IsNullOrWhiteSpace(alarm.Name) ? "커스텀 알람" : alarm.Name);
+            toFire ??= string.IsNullOrWhiteSpace(alarm.Name) ? "커스텀 알람" : alarm.Name;
         }
+
+        if (toFire is not null) FireAlarm(toFire);
 
         UpdateNextAlarmLabel();
     }
