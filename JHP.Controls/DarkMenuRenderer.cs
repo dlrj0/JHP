@@ -9,7 +9,7 @@ public class DarkMenuRenderer : ToolStripProfessionalRenderer
 
     protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
     {
-        Color bg = e.Item.Selected || e.Item.Pressed
+        Color bg = e.Item.Enabled && (e.Item.Selected || e.Item.Pressed)
             ? Color.FromArgb(55, 90, 145)   // 버튼(강조) 색상과 통일
             : Color.FromArgb(40, 40, 40);   // 메뉴바 기본 배경
 
@@ -19,7 +19,7 @@ public class DarkMenuRenderer : ToolStripProfessionalRenderer
 
     protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
     {
-        e.TextColor = Color.White;
+        e.TextColor = e.Item.Enabled ? Color.White : Color.FromArgb(110, 110, 110);
         base.OnRenderItemText(e);
     }
 

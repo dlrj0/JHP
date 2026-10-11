@@ -269,7 +269,7 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 | 슬라이더를 끌 때마다 config.json 쓰기 | 400ms 디바운스 저장(`ScheduleSave`), 종료 시 저장은 그대로 |
 | 설정 파일 손상 시 다음 저장에서 사용자 설정이 사라짐 / 저장 중 종료 시 반쯤 써진 파일 | 임시 파일 교체 저장, 파싱 실패 시 `.corrupt` 사본 보존 |
 - 검증: 빌드 0 오류, `tools/ui-test.ps1` 27/27 통과(입력 즉시 반영·아이콘은 자동 검증 항목 없음 → 사용자 육안 확인 권장).
-- 아직 안 한 후보: 사이트 목록 순서 변경, 단축키, 새 창(window.open) 처리 정책, 단일 인스턴스, 알람 파일 누락 시 안내. (17:00 자동 작업이 이어서 검토)
+- 아직 안 한 후보: 단축키, 새 창(window.open) 처리 정책, 단일 인스턴스, 알람 파일 누락 시 안내. (17:00 자동 작업이 이어서 검토)
 
 ### 변경 이력 (되돌리기용)
 기능이 사라지거나 동작이 달라졌을 때 아래 항목 단위로 되돌립니다. 커밋 해시는 `git log --oneline`에서 해당 요약으로 찾고, `git revert <해시>`(이력 보존) 또는 문제 파일만 `git checkout <이전해시> -- <파일>`로 복구합니다.
@@ -286,6 +286,7 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 | 창 상태 | 최대화 영역 제한, 복원 글리프, RestoreBounds 저장 | `Form1.cs`, `ControlButton.cs` | `ButtonType.Restore` 추가됨 |
 | 메뉴/툴팁 | 체크 표시 다크화, ✕ 배율, 툴팁 | `DarkMenuRenderer.cs`, `Form1.cs` | |
 | 테스트 | 캡처 전 1.5초 대기(검게 캡처되는 문제) | `tools/ui-test.ps1` | |
+| 사이트 관리 | ▼ 메뉴 사이트 항목 우클릭 → 이동/수정/시작 사이트 지정 (`SiteListOps` 순수 함수, `SiteForm(Site?)` 오버로드, 비활성 항목 색) | `JHP.Api/Site.cs`, `JHP/Form1.cs`, `JHP/SiteForm.cs`, `JHP.Controls/DarkMenuRenderer.cs` | 시작 사이트는 `LatestUrl`이 없을 때만 쓰임(마지막 주소 우선 규칙 불변). 팝업이라 UI 자동 테스트 미검증 → 육안 확인 필요 |
 
 현재 검증: 빌드 0 오류, `tools/ui-test.ps1` 전체 통과(메뉴 열림 검사가 드물게 타이밍 때문에 실패 → 재실행 시 통과, 앱 문제 아님).
 

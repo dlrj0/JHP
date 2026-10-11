@@ -6,12 +6,22 @@ public class SiteForm : Form
 {
     private TextBox _tbName = null!;
     private TextBox _tbUrl = null!;
+    private Button _btnOk = null!;
 
     public Site? Result { get; private set; }
 
-    public SiteForm()
+    // 새 사이트 추가
+    public SiteForm() : this(null) { }
+
+    // site가 있으면 "사이트 수정" 모드: 이름/주소를 채우고 제목/확인 버튼 문구를 바꾼다.
+    public SiteForm(Site? site)
     {
         InitializeComponent();
+        if (site is null) return;
+        Text = "사이트 수정";
+        _tbName.Text = site.Name;
+        _tbUrl.Text = site.Url;
+        _btnOk.Text = "저장";
     }
 
     private void InitializeComponent()
@@ -59,6 +69,7 @@ public class SiteForm : Form
         };
         btnOk.FlatAppearance.BorderSize = 0;
         btnOk.Click += BtnOk_Click;
+        _btnOk = btnOk;
 
         var btnCancel = new Button
         {

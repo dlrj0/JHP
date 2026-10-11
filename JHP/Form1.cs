@@ -521,8 +521,9 @@ public partial class Form1 : Form
 
         // 모든 항목의 폭을 가장 긴 텍스트 기준으로 통일 → ✕ 아이콘이 항상 같은 위치(우측 끝)에 정렬됨
         int textWidth = TextRenderer.MeasureText("＋ 사이트 추가", menu.Font).Width;
-        foreach (var site in _config.Sites)
-            textWidth = Math.Max(textWidth, TextRenderer.MeasureText(site.Name, menu.Font).Width);
+        for (int i = 0; i < _config.Sites.Count; i++)
+            textWidth = Math.Max(textWidth, TextRenderer.MeasureText(
+                SiteListOps.DisplayName(_config.Sites, i, _config.DefaultSite), menu.Font).Width);
         textWidth = Math.Max(textWidth, TextRenderer.MeasureText("다른 창 선택 시 테두리 안보이기", menu.Font).Width);
         int itemWidth = textWidth + (int)(70 * DeviceDpi / 96f);
         int itemHeight = menu.Font.Height + (int)(14 * DeviceDpi / 96f); // AutoSize=false 항목은 높이를 직접 지정해야 배율에서 글자가 잘리지 않는다
@@ -560,15 +561,23 @@ public partial class Form1 : Form
         if (_config.Sites.Count > 0)
             menu.Items.Add(new ToolStripSeparator());
 
-        foreach (var site in _config.Sites)
+        foreach (var site in _config.Sites.ToList())
         {
-            var item = new SiteMenuItem(site)
+            int siteIndex = _config.Sites.IndexOf(site);
+            var item = new SiteMenuItem(site, SiteListOps.DisplayName(_config.Sites, siteIndex, _config.DefaultSite))
             {
                 AutoSize = false,
                 Size = new Size(itemWidth, itemHeight),
                 Checked = JHP.Api.Site.SameUrl(site.Url, currentUrl)
             };
             item.Click += (_, _) => NavigateToSite(site);
+            // 우클릭: 열린 메뉴를 닫고 관리 메뉴를 같은 위치에 띄운다 (관리 후 ▼ 메뉴를 다시 열어 목록을 갱신)
+            item.ManageRequested += (_, _) =>
+            {
+                var pos = Cursor.Position;
+                menu.Close();
+                BeginInvoke(() => OpenSiteManageMenu(site, pos));
+            };
             item.DeleteRequested += (_, _) =>
             {
                 _config.Sites.Remove(site);
@@ -592,24 +601,95 @@ public partial class Form1 : Form
     // 🔴 버그 수정: OpenAlarmSettings와 동일한 TopMost 자식창 버그 수정 적용
     private void AddSite()
     {
+        var added = ShowSiteDialog(null);
+        if (added is null) return;
+
+        _config.Sites.Add(added);
+        _config.Save();
+    }
+
+    // 사이트 추가/수정 대화상자. initial이 null이면 추가, 있으면 수정. 취소 시 null.
+    private JHP.Api.Site? ShowSiteDialog(JHP.Api.Site? initial)
+    {
         bool wasTopMost = TopMost;
         TopMost = false;
         _modalDepth++;
-        JHP.Api.Site? added = null;
         try
         {
-            using var form = new SiteForm();
-            if (form.ShowDialog(this) == DialogResult.OK) added = form.Result;
+            using var form = new SiteForm(initial);
+            return form.ShowDialog(this) == DialogResult.OK ? form.Result : null;
         }
         finally
         {
             _modalDepth--;
             TopMost = wasTopMost;
         }
-        if (added is null) return;
+    }
 
-        _config.Sites.Add(added);
-        _config.Save();
+    // 사이트 항목 우클릭 관리 메뉴: 위로/아래로 이동, 이름/주소 수정, 시작 사이트 지정.
+    // 순서/지정 계산은 SiteListOps(순수 함수)가 하고, 여기서는 반영·저장·메뉴 재오픈만 한다.
+    private void OpenSiteManageMenu(JHP.Api.Site site, Point screenPos)
+    {
+        int index = _config.Sites.IndexOf(site);
+        if (index < 0) { OpenSiteMenu(); return; } // 그 사이 목록에서 사라짐
+
+        float s = DeviceDpi / 96f;
+        var menu = new ContextMenuStrip
+        {
+            Renderer = new DarkMenuRenderer(),
+            ShowImageMargin = false,
+            BackColor = Color.FromArgb(40, 40, 40)
+        };
+        int w = (int)(Math.Max(TextRenderer.MeasureText("이름/주소 수정…", menu.Font).Width,
+                               TextRenderer.MeasureText("시작 사이트로 지정", menu.Font).Width) + 24 * s);
+        int h = menu.Font.Height + (int)(12 * s);
+
+        bool acted = false;
+        ToolStripMenuItem Add(string text, bool enabled, Action action)
+        {
+            var mi = new ToolStripMenuItem(text) { AutoSize = false, Size = new Size(w, h), Enabled = enabled };
+            mi.Click += (_, _) => { acted = true; action(); };
+            menu.Items.Add(mi);
+            return mi;
+        }
+
+        Add("위로 이동", index > 0, () => ApplySiteChange(() => SiteListOps.TryMove(_config.Sites, index, -1)));
+        Add("아래로 이동", index < _config.Sites.Count - 1, () => ApplySiteChange(() => SiteListOps.TryMove(_config.Sites, index, +1)));
+        menu.Items.Add(new ToolStripSeparator());
+        Add("이름/주소 수정…", true, () =>
+        {
+            var edited = ShowSiteDialog(site);
+            if (edited is null) return;
+            ApplySiteChange(() =>
+            {
+                string def = _config.DefaultSite;
+                bool ok = SiteListOps.TryReplace(_config.Sites, index, edited, ref def);
+                _config.DefaultSite = def;
+                return ok;
+            });
+        });
+        Add("시작 사이트로 지정", SiteListOps.CanSetDefault(_config.Sites, index, _config.DefaultSite), () =>
+            ApplySiteChange(() =>
+            {
+                string def = _config.DefaultSite;
+                bool ok = SiteListOps.TrySetDefault(_config.Sites, index, ref def);
+                _config.DefaultSite = def;
+                return ok;
+            }));
+
+        // 이동/지정/수정을 하면(취소 포함) ▼ 메뉴를 다시 열어 갱신된 목록을 보여 준다. 메뉴 밖을 눌러 닫은 경우는 열지 않음.
+        menu.Closed += (_, _) => BeginInvoke(() =>
+        {
+            menu.Dispose();
+            if (acted) OpenSiteMenu();
+        });
+        menu.Show(screenPos);
+    }
+
+    // 목록 변경 함수를 실행하고, 실제로 바뀌었으면 저장한다.
+    private void ApplySiteChange(Func<bool> change)
+    {
+        if (change()) _config.Save();
     }
 
     private void NavigateToSite(Site site)
@@ -633,14 +713,20 @@ public partial class Form1 : Form
 
         public JHP.Api.Site SiteInfo { get; }
         public event EventHandler? DeleteRequested;
+        public event EventHandler? ManageRequested;
 
-        public SiteMenuItem(Site site) : base(site.Name)
+        public SiteMenuItem(Site site, string displayText) : base(displayText)
         {
             SiteInfo = site;
         }
 
         protected override void OnMouseUp(MouseEventArgs mea)
         {
+            if (mea.Button == MouseButtons.Right)
+            {
+                ManageRequested?.Invoke(this, EventArgs.Empty);
+                return; // 우클릭은 이동(Click) 없이 관리 메뉴만 연다
+            }
             if (mea.Button == MouseButtons.Left && mea.X >= Width - DeleteZoneWidth)
             {
                 DeleteRequested?.Invoke(this, EventArgs.Empty);
