@@ -39,8 +39,8 @@ public class Synth
             string path = Path.Combine(AppContext.BaseDirectory, "alarm", Path.GetFileName(alarmName ?? ""));
             if (!File.Exists(path))
             {
-                // 알람 파일이 없어도 알람이 울렸다는 것은 알 수 있게 시스템 소리로 대체
-                System.Media.SystemSounds.Asterisk.Play();
+                // 알람 파일이 없어도 알람이 울렸다는 것은 알 수 있게 시스템 소리로 대체 (볼륨 0이면 조용히)
+                if (volume > 0) System.Media.SystemSounds.Asterisk.Play();
                 return;
             }
 
@@ -104,5 +104,9 @@ public class Synth
         catch { }
     }
 
-    private void OnPlaybackStopped(object? sender, StoppedEventArgs e) => Stop();
+    private void OnPlaybackStopped(object? sender, StoppedEventArgs e)
+    {
+        // 이미 교체된 이전 플레이어의 지연된 이벤트가 새로 시작한 재생을 끊지 않도록 현재 플레이어일 때만 정리
+        if (ReferenceEquals(sender, _wavePlayer)) Stop();
+    }
 }

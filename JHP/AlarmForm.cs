@@ -247,9 +247,12 @@ public class AlarmForm : Form
         return lbl;
     }
 
+    private int _initialVolume;
+
     private void LoadFromConfig()
     {
         var cfg = Config.Instance;
+        _initialVolume = cfg.Volume;
         for (int i = 0; i < 8; i++) _alarmChecks[i].Checked = cfg.AlarmEnabled[i];
         _tbAlarmName.Text = cfg.AlarmName;
         _cbTts.Checked = cfg.Tts;
@@ -271,7 +274,9 @@ public class AlarmForm : Form
         for (int i = 0; i < 8; i++) cfg.AlarmEnabled[i] = _alarmChecks[i].Checked;
         cfg.AlarmName = _tbAlarmName.Text;
         cfg.Tts = _cbTts.Checked;
-        cfg.Volume = _tbVolume.Value;
+        // 설정창을 열어 둔 동안 메인 창 슬라이더로 바꾼 볼륨을 되돌리지 않도록, 이 창에서 바꾼 경우에만 반영한다
+        if (_tbVolume.Value != Math.Clamp(_initialVolume, _tbVolume.Minimum, _tbVolume.Maximum))
+            cfg.Volume = _tbVolume.Value;
         cfg.Rate = _tbRate.Value;
         for (int i = 0; i < 3; i++)
         {

@@ -40,6 +40,12 @@ public partial class Form1 : Form
         Activated += Form1_Activated;
         Deactivate += Form1_Deactivate;
         SizeChanged += (_, _) => OnWindowStateChanged();
+        Resize += (_, _) => OnWindowStateChanged();   // 같은 크기로 최대화되는 경우에도 상태 표시를 갱신
+        LocationChanged += (_, _) =>
+        {
+            // 다른 모니터로 옮긴 뒤 Win+↑ 등으로 최대화해도 해당 모니터의 작업 영역을 쓰도록 갱신
+            if (WindowState == FormWindowState.Normal) UpdateMaximizedBounds();
+        };
     }
 
     private async void Form1_Load(object? sender, EventArgs e)
@@ -162,7 +168,7 @@ public partial class Form1 : Form
         lblVolumeValue.Click += (_, _) => BeginInlineEdit("volume");
 
         // 투명도 (30~100%)
-        sliderOpacity.Value = Math.Clamp((int)(_config.Opacity * 100), sliderOpacity.Minimum, sliderOpacity.Maximum);
+        sliderOpacity.Value = Math.Clamp((int)Math.Round(_config.Opacity * 100), sliderOpacity.Minimum, sliderOpacity.Maximum);
         Opacity = sliderOpacity.Value / 100.0;
         lblOpacityValue.Text = $"투명도 {sliderOpacity.Value}%";
         sliderOpacity.ValueChanged += (_, _) =>
@@ -374,6 +380,12 @@ public partial class Form1 : Form
         long now = Environment.TickCount64;
         int steps = (int)((now - _lastTickMs) / 1000);
         if (steps < 1) return;
+        if (steps > 120)
+        {
+            // 절전/최대 부하 등으로 2분 넘게 멈췄다 돌아온 경우: 밀린 시간을 한꺼번에 반영하지 않고 지금부터 다시 센다
+            _lastTickMs = now;
+            return;
+        }
         _lastTickMs += steps * 1000L;
 
         // 같은 순간에 여러 알람이 겹치면(예: 2시간 시점에 1시간/30분/... 동시 도달) 목록 위쪽 하나만 울린다.
@@ -583,22 +595,20 @@ public partial class Form1 : Form
         bool wasTopMost = TopMost;
         TopMost = false;
         _modalDepth++;
-        bool ok;
-        SiteForm? form = null;
+        JHP.Api.Site? added = null;
         try
         {
-            form = new SiteForm();
-            ok = form.ShowDialog(this) == DialogResult.OK && form.Result is not null;
+            using var form = new SiteForm();
+            if (form.ShowDialog(this) == DialogResult.OK) added = form.Result;
         }
         finally
         {
             _modalDepth--;
             TopMost = wasTopMost;
         }
-        if (!ok || form is null) return;
-        form.Dispose();
+        if (added is null) return;
 
-        _config.Sites.Add(form.Result!);
+        _config.Sites.Add(added);
         _config.Save();
     }
 
@@ -621,12 +631,12 @@ public partial class Form1 : Form
     {
         public static int DeleteZoneWidth = 28; // OpenSiteMenu()에서 DPI 배율로 갱신
 
-        public Site Site { get; }
+        public JHP.Api.Site SiteInfo { get; }
         public event EventHandler? DeleteRequested;
 
         public SiteMenuItem(Site site) : base(site.Name)
         {
-            Site = site;
+            SiteInfo = site;
         }
 
         protected override void OnMouseUp(MouseEventArgs mea)

@@ -94,6 +94,7 @@ public class Config
         Rate = Math.Clamp(Rate, -10, 10);
 
         Sites = (Sites ?? []).Where(s => s is not null && !string.IsNullOrWhiteSpace(s.Url)).ToList();
+        foreach (var s in Sites) s.Name ??= s.Url;
         DefaultSite ??= "";
         AlarmName ??= "";
         LatestUrl ??= "";

@@ -31,6 +31,8 @@ static class Program
         Application.Run(new Form1());
     }
 
+    private static DateTime _lastErrorShown = DateTime.MinValue;
+
     private static void ReportError(Exception? ex)
     {
         try
@@ -39,6 +41,10 @@ static class Program
                 $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex}\r\n\r\n");
         }
         catch { }
+
+        // 같은 오류가 타이머 등에서 반복돼도 대화상자가 쌓이지 않도록 5초에 한 번만 알린다 (로그는 모두 기록)
+        if ((DateTime.Now - _lastErrorShown).TotalSeconds < 5) return;
+        _lastErrorShown = DateTime.Now;
 
         try
         {
