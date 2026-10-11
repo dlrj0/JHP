@@ -25,7 +25,7 @@ public class ControlButton : Button
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics;
-        bool hovered = ClientRectangle.Contains(PointToClient(Cursor.Position));
+        bool hovered = _hovered;
 
         Color bg = hovered
             ? (Type == ButtonType.Close ? Color.FromArgb(196, 43, 28) : Color.FromArgb(60, 60, 60))
@@ -53,8 +53,19 @@ public class ControlButton : Button
         }
     }
 
-    protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); Invalidate(); }
-    protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); Invalidate(); }
+    // 호버 상태는 실제 커서 위치(Cursor.Position)가 아니라 MouseEnter/Leave 이벤트로 추적한다.
+    // (자동 UI 테스트가 메시지로 마우스 이벤트를 보내도 동작하고, 사용자의 실제 마우스를 건드리지 않아도 된다)
+    private bool _hovered;
+
+    // MouseEnter가 오지 않는 경우(메시지로 합성한 마우스 이동 등)에도 첫 MouseMove에서 호버로 전환한다.
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (!_hovered) { _hovered = true; Invalidate(); }
+    }
+
+    protected override void OnMouseEnter(EventArgs e) { _hovered = true; base.OnMouseEnter(e); Invalidate(); }
+    protected override void OnMouseLeave(EventArgs e) { _hovered = false; base.OnMouseLeave(e); Invalidate(); }
 
     // 초기 렌더링 버그 수정: 핸들 생성 직후 강제로 한 번 더 그려줌 (Timerbutton.cs와 동일 패턴)
     protected override void OnHandleCreated(EventArgs e)

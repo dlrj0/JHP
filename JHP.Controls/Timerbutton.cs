@@ -40,7 +40,7 @@ public class TimerButton : Button
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics;
-        bool hovered = ClientRectangle.Contains(PointToClient(Cursor.Position));
+        bool hovered = _hovered;
 
         // 투명 브러시는 더블버퍼(검정)가 그대로 보이므로 부모 배경색으로 칠한다
         Color bg = hovered ? Color.FromArgb(60, 60, 60) : (Parent?.BackColor ?? Color.FromArgb(28, 28, 28));
@@ -68,8 +68,19 @@ public class TimerButton : Button
             RightClick?.Invoke(this, e);
     }
 
-    protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); Invalidate(); }
-    protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); Invalidate(); }
+    // 호버 상태는 실제 커서 위치(Cursor.Position)가 아니라 MouseEnter/Leave 이벤트로 추적한다.
+    // (자동 UI 테스트가 메시지로 마우스 이벤트를 보내도 동작하고, 사용자의 실제 마우스를 건드리지 않아도 된다)
+    private bool _hovered;
+
+    // MouseEnter가 오지 않는 경우(메시지로 합성한 마우스 이동 등)에도 첫 MouseMove에서 호버로 전환한다.
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (!_hovered) { _hovered = true; Invalidate(); }
+    }
+
+    protected override void OnMouseEnter(EventArgs e) { _hovered = true; base.OnMouseEnter(e); Invalidate(); }
+    protected override void OnMouseLeave(EventArgs e) { _hovered = false; base.OnMouseLeave(e); Invalidate(); }
 
     // 초기 표시 시 아이콘이 마우스 호버 전까지 보이지 않는 문제 방지:
     // 핸들 생성 직후 메시지 루프가 비는 시점에 강제로 한 번 더 그려준다. (ControlButton.cs와 동일 패턴)

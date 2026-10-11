@@ -16,6 +16,8 @@
 7. **[상시 규칙] 파일이 없으면 코드를 쓰지 않고, 필요한 파일·정보를 먼저 요청합니다.**
 8. 빌드 확인은 가능합니다: `dotnet build JHP/JHP.csproj` (이 환경에서 0 오류 확인됨). 실행 동작(호버, 리사이즈, 레이아웃)은 사용자가 VS에서 직접 확인해야 합니다.
 9. 커밋·푸시는 사용자가 요청할 때만 합니다.
+10. **[상시 규칙] 사용자의 컴퓨터 사용을 방해하지 않습니다.** 실제 마우스 커서 이동·클릭, 키 입력, 포커스 뺏기, 최대화로 사용자 화면을 덮는 동작을 하지 않습니다(`SetCursorPos`, `mouse_event`, `SetForegroundWindow`, `taskkill /IM JHP.exe` 금지). 사용자가 쓰는 JHP 인스턴스는 건드리지 않습니다.
+11. **[상시 규칙] UI 검증은 `tools/ui-test.ps1`로 합니다.** 창 메시지(SendMessage)와 UI Automation으로 조작하고 PrintWindow로 캡처하며, 별도 폴더의 인스턴스를 실행하고 자기 PID만 종료합니다. 실행: `powershell -NoProfile -ExecutionPolicy Bypass -File tools/ui-test.ps1 -OutDir <캡처폴더>` (빌드 생략 `-SkipBuild`).
 
 ---
 
@@ -216,3 +218,44 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 - 실제 mp3/TTS 소리 재생(캡처로는 확인 불가), OTT 다음화 스킵(9장 참고)
 - 125%/150% 배율(200%만 캡처 확인), 최대화 상태 레이아웃
 - 사이트 추가 대화상자 화면(배율 수정 후 캡처 못 함)
+
+
+---
+
+## 11. 세션 인계 요약 (2026-10-12 늦은 시각, 토큰 한도 대비)
+
+### 현재 상태 한눈에
+- 브랜치 `test`, 최근 커밋 `fa4d8a7`(DPI/원본 UI 반영). 그 이후 변경(호버를 이벤트 기반으로, `tools/ui-test.ps1` 추가, 이 문서 갱신)은 이 문서와 함께 커밋됨.
+- 원격에는 `6ffd52c`까지만 푸시됨(`df3d6e6`, `fa4d8a7` 이후는 미푸시). 푸시/Release는 사용자 요청 시에만.
+- 빌드 0 오류. `tools/ui-test.ps1` 결과: **26/26 통과**(호버는 SKIP, 사이트 추가 대화상자 내부 검사는 UIA 시간 초과 SKIP).
+
+### 이번 세션에서 한 일
+1. 기능 점검 → 알람 겹침 시 하나만 울리게, 버전 비교, 설정/알람 파일 경로 수정.
+2. 실제 실행 캡처로 진짜 원인 발견·수정: 화면 배율(200%) 미대응, 창 버튼이 창 밖으로 밀림(Anchor), 투명 브러시 검정 배경, 메뉴 항목 높이, AutoScale를 컨트롤 추가 전에 지정한 문제.
+3. 인벤 34059 글 이미지 3장으로 원본 UI 확인 → 사이트 메뉴 순서/기본 사이트 7개/알람 항목명(재획비, 경쿠, 경뿌/경쿠/유니온, 유니온 버프, 메소 회수, 파운틴)/알람 소리 드롭다운+▷/TTS 샘플 반영.
+4. 마우스 없이 테스트하도록 `tools/ui-test.ps1` 작성(규칙 10, 11).
+
+### 알아 둘 함정 (다음 세션에서 같은 시간 낭비 방지)
+- WinForms는 합성 `WM_MOUSEMOVE` 직후 2ms 안에 `WM_MOUSELEAVE`가 와서(실제 커서가 위에 없으므로) **호버 색은 마우스 없이 자동 검증이 안 됨**. 호버 코드는 `_hovered` 필드(MouseEnter/Move/Leave 이벤트)로 동작하며, 실제 마우스로는 과거에 빨강(196,43,28)/회색(60,60,60) 확인함. 최종 육안 확인은 사용자에게 요청.
+- `AutoScaleMode.Dpi`는 **자식 컨트롤을 모두 추가한 뒤** 지정해야 함(앞에서 하면 빈 폼에만 적용). 하드코딩 px는 `DeviceDpi / 96f`로 환산.
+- `Anchor=Right`는 부모 패널의 기본 폭(200) 기준으로 계산돼 어긋남 → 직접 배치(`LayoutTitleBar`).
+- UIA `BoundingRectangle`이 무한대일 수 있음(`ToInt`로 변환). WebView2 내부 요소는 HWND가 없어 `NativeWindowHandle=0`으로 거름.
+- 메뉴 드롭다운 검사 시 `ContextMenuStrip`이 창이 화면 밖(-20000)이어도 **사용자 화면 좌상단에 잠깐 표시**됨(이를 피하려면 메뉴 테스트를 빼야 함).
+- 모달 대화상자를 여는 항목은 UIA `Invoke`가 막히므로 별도 runspace에서 실행(`Invoke-ElAsync`). 대화상자 열린 동안 `FromHandle`이 가끔 시간 초과됨.
+- Git Bash의 `/tmp`와 Windows Python의 `/tmp`는 다른 경로. 임시 파일은 스크래치 폴더 사용. 한글이 들어간 파이썬은 heredoc 대신 파일로 저장해 실행.
+- PowerShell 5.1: 단일 PSCustomObject의 `.Count`가 null일 수 있어 `@(...)`로 감싸야 함. 스크립트 파일은 UTF-8 **BOM** 필요.
+
+### 남은 작업 (우선순위)
+| 순위 | 작업 | 비고 |
+|------|------|------|
+| 1 | **OTT 다음화 스킵 개선** | 지금은 페이지 로드 시 1회만 클릭. 사용자가 라프텔/넷플릭스에서 "다음화" 버튼 요소(HTML)를 알려주면 `setInterval`/`MutationObserver`로 교체 (`JHP.Asset/UserScripts.cs`) |
+| 2 | 사이트 추가 화면/최대화/125%·150% 육안 확인 | 사용자 확인 필요 |
+| 3 | 원본의 "사이트 관리" 창(목록+이름/주소+추가) 필요 여부 | 현재는 메뉴 ✕ 삭제 + 추가 대화상자. 원본은 목록이 있는 관리 창 |
+| 4 | 알람 소리/TTS 실제 재생 확인 | `alarm/`에 mp3를 넣고 사용자가 들어봐야 함 |
+| 5 | 사용자 요청 시 푸시, v1.1.0 Release 생성 | `UpdateChecker`는 Release 기준 |
+| 6 | 알람 설정창 하단 여백, 커스텀 알람 기본값(원본은 1초) 다듬기 | 사소함 |
+
+### 파일 지도 (이번 세션 변경분)
+- `JHP/Form1.cs`(레이아웃/메뉴/알람 토글/Timer_Tick), `JHP/Form1.Designer.cs`(AutoScale, 리사이즈 패널), `JHP/AlarmForm.cs`, `JHP/SiteForm.cs`
+- `JHP.Controls/ControlButton.cs`, `Timerbutton.cs`, `NSlider.cs`(DPI, 호버), `JHP.Api/Config.cs`(기본 사이트, 경로), `Synth.cs`(경로), `UpdateChecker.cs`, `ReSize.cs`
+- `tools/ui-test.ps1` (UI 자동 테스트), `CHANGELOG.md`(v1.1.0)
