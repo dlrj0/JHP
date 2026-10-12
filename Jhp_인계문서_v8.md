@@ -329,3 +329,8 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 - [AlarmForm 직접 배치] `Anchor=Right/Bottom` 제거 → `LayoutRightAligned()`(Resize/Shown에서 호출). 되돌리기: `git revert` 해당 커밋 (`JHP/AlarmForm.cs`)
 - [타이틀바 더블클릭 최대화] `pnlTitleBar`/`lblTitle` `MouseDoubleClick` → `btnMaximize.PerformClick()` (`JHP/Form1.cs`). 자동 검증 불가 → 사용자 육안 확인 필요. 되돌리기: `git revert` 해당 커밋
 - [전역 단축키] `RegisterHotKey`(Ctrl+Alt+J), `Config.HotkeyEnabled`(기본 false), ▼ 메뉴 체크. `Form1.WndProc`의 WM_HOTKEY → `ToggleTimer`. 되돌리기: `git revert` 해당 커밋. 실제 키 입력은 사용자 PC를 건드리므로 자동 검증하지 않음 → 사용자 확인 필요(조합 변경 희망 시 `VK_J`)
+
+### 게임 안전 원칙 (사용자 요구, 2026-10-12)
+- 목적: 메이플 사냥 중 같이 쓰는 프로그램이므로 **게임 제재 사유가 되면 안 됨**. 현재 코드에는 `SendInput`/후킹/메모리 접근/프로세스·창 열거/화면 캡처/주입이 **없음**(2026-10-12 grep 확인). 외부 통신은 WebView2(사용자가 연 사이트)와 업데이트 확인(GitHub)뿐.
+- 전역 단축키(Ctrl+Alt+J)는 `RegisterHotKey`만 사용(키 후킹 아님). 기본 꺼짐, 켠 사람만 동작. 이 조합은 시스템 전체에서 다른 프로그램(게임 포함)에 전달되지 않으므로, 게임에서 쓰는 키와 겹치면 안 됨. 조합을 자유 입력으로 바꾸게 하지 않고 고정 조합 또는 소수의 프리셋만 허용할 것(기능 요청이 오면 이 원칙을 먼저 설명).
+- 새 기능을 넣을 때마다 위 목록(게임 프로세스를 읽거나 건드리는 기능)에 해당하지 않는지 확인합니다. 제재 여부는 넥슨의 정책에 달려 있어 코드로 보장할 수는 없으며, 보수적으로 "게임을 전혀 건드리지 않는다"를 유지합니다.
