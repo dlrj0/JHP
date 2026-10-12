@@ -143,8 +143,18 @@ function Find-ProcWindow([string]$title, [int]$timeoutMs = 4000) {
 function Run-Safe([string]$name, [scriptblock]$body) {
     # UI Automation 시간 초과 등 예외가 한 검사에서 나도 전체 테스트가 중단되지 않게 한다(해당 검사는 SKIP 처리).
     try { & $body }
-    catch { Write-Host "  [SKIP] $name : $($_.Exception.Message)" }
+    catch {
+        $msg = $_.Exception.Message
+        # 컨트롤을 찾지 못한 것은 시간 초과가 아니라 구조/이름이 바뀐 것이므로 조용히 건너뛰지 않고 실패로 기록한다.
+        if ($msg -like 'alarm controls not found*' -or $msg -like 'alarm window did not open*') {
+            Check "$name : 컨트롤/창을 찾지 못함" $false $msg
+        } else {
+            $script:skipCount++
+            Write-Host "  [SKIP] $name : $msg"
+        }
+    }
 }
+$script:skipCount = 0
 function Get-TitleParts {
     $wr = Get-Rect $main
     $e = Get-Elements $main
@@ -721,4 +731,5 @@ finally {
 $fail = @($results | Where-Object { -not $_.Pass })
 Write-Host ''
 Write-Host ("결과: {0} / {1} 통과, 캡처: {2}" -f ($results.Count - $fail.Count), $results.Count, $OutDir)
+if ($script:skipCount -gt 0) { Write-Host ("건너뜀(UI Automation 시간 초과 등): {0}건" -f $script:skipCount) }
 if ($fail.Count -gt 0) { exit 1 }
