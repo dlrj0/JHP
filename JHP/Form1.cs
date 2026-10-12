@@ -511,8 +511,9 @@ public partial class Form1 : Form
         _pendingUpdate = null;
         try
         {
-            var answer = WithDialogState(() => Prompt.ShowYesNoCancel("업데이트 알림",
-                $"새 버전 {update.Latest}이 있습니다.\n\n예: 다운로드 페이지 열기\n아니오: 이 버전은 다시 묻지 않음\n취소(Esc): 나중에", this));
+            var answer = WithDialogState(() => DarkMessageBox.Show(this,
+                $"새 버전 {update.Latest}이 있습니다.\n\n예: 다운로드 페이지 열기\n아니오: 이 버전은 다시 묻지 않음\n취소(Esc): 나중에",
+                "업데이트 알림", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question));
             if (answer == DialogResult.Yes)
                 Process.Start(new ProcessStartInfo(update.Url) { UseShellExecute = true });
             else if (answer == DialogResult.No)
