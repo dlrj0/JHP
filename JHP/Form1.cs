@@ -476,6 +476,8 @@ public partial class Form1 : Form
                 await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.LaftelSkipNext);
             else if (HostIs(host, "netflix.com"))
                 await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.NetflixSkipNext);
+            else if (HostIs(host, "reanime.to"))
+                await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.ReanimeAutoOptions);
         }
         catch { }
     }
