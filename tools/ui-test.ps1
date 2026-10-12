@@ -430,6 +430,84 @@ try {
 
     Close-AlarmIfOpen
 
+    # ---------- 5-2. 타이머 카운트다운 / 재충전 / 항목 껐다 켜기 리셋 (타이틀바 남은 시간 라벨) ----------
+    # 라벨(lblNext)은 정지 중 '--:--', 실행 중 다음 알람까지 남은 시간. 알람이 울리면 그 항목은 주기만큼 다시 채워진다.
+    # 알람이 한 번 울리므로(시스템 소리/TTS) 짧게 한 번만 확인한다. 끝나면 알람 설정값을 원래대로 돌려놓는다.
+    function Get-NextSeconds {
+        $t = Get-LabelText '*:*'
+        if ($null -eq $t) { return -2 }
+        if ($t -eq '--:--') { return -1 }
+        $p = @($t.Split(':') | ForEach-Object { [int]$_ })
+        if ($p.Count -eq 3) { $p[0] * 3600 + $p[1] * 60 + $p[2] } else { $p[0] * 60 + $p[1] }
+    }
+    function Edit-Alarm([scriptblock]$act) {
+        $h = Open-AlarmForm
+        $c = Get-AlarmControls $h
+        if (-not $c.Check1 -or -not $c.Check2 -or $c.Customs.Count -ne 3 -or $c.TickEdits.Count -ne 3 -or -not $c.Ok) { throw 'alarm controls not found' }
+        & $act $c
+        Invoke-El $c.Ok
+        Start-Sleep -Milliseconds 500
+    }
+    $script:timerRunning5 = $false
+    Run-Safe 'timer-countdown' {
+        $tb = ((Get-Elements $main) | Where-Object { $_.Type -eq 'Button' } | Sort-Object L)[1]
+        # 커스텀 알람 1: 켜짐(앞 검사에서) → 4초로 바꾼다
+        Edit-Alarm { param($c) Set-EditValue $c.TickEdits[0] '4' }
+        Check 'countdown: 정지 상태에서는 --:--' ((Get-NextSeconds) -eq -1) ("label=" + (Get-LabelText '*:*'))
+        Invoke-El $tb; $script:timerRunning5 = $true
+        $seen = @(); $sw = [Diagnostics.Stopwatch]::StartNew()
+        while ($sw.ElapsedMilliseconds -lt 9000) {
+            $v = Get-NextSeconds
+            if ($v -ge 0 -and ($seen.Count -eq 0 -or $seen[-1] -ne $v)) { $seen += $v }
+            Start-Sleep -Milliseconds 150
+        }
+        $dec = $false; $refill = $false
+        for ($i = 1; $i -lt $seen.Count; $i++) {
+            if ($seen[$i] -lt $seen[$i - 1]) { $dec = $true }
+            if ($seen[$i] -gt $seen[$i - 1]) { $refill = $true }
+        }
+        Check 'countdown: 남은 시간이 줄어듦' $dec ("seen=" + ($seen -join ','))
+        Check 'countdown: 알람 주기(4초)에 맞춰 다시 채워짐' ($refill -and ($seen | Measure-Object -Maximum).Maximum -le 4) ("seen=" + ($seen -join ','))
+        Invoke-El $tb; $script:timerRunning5 = $false
+        Start-Sleep -Milliseconds 400
+        Check 'countdown: 정지하면 --:--로 돌아감' ((Get-NextSeconds) -eq -1) ("label=" + (Get-LabelText '*:*'))
+    }
+    if ($script:timerRunning5) {
+        try { $tb = ((Get-Elements $main) | Where-Object { $_.Type -eq 'Button' } | Sort-Object L)[1]; Invoke-El $tb } catch { }
+        $script:timerRunning5 = $false
+    }
+
+    Run-Safe 'alarm-reset-rule' {
+        $tb = ((Get-Elements $main) | Where-Object { $_.Type -eq 'Button' } | Sort-Object L)[1]
+        # 준비: 경쿠 꺼짐, 커스텀 1 = 60초(켜짐), 재획비(2시간) 켜짐
+        Edit-Alarm { param($c) Set-EditValue $c.TickEdits[0] '60' }
+        Invoke-El $tb; $script:timerRunning5 = $true
+        Start-Sleep -Milliseconds 3300
+        $s1 = Get-NextSeconds
+        Edit-Alarm { param($c) Set-Toggle $c.Check2 }                 # 다른 항목(경쿠 1시간)을 켜도 진행 중인 항목은 리셋되지 않음
+        $s2 = Get-NextSeconds
+        Check 'reset-rule: 다른 항목을 켜도 진행 중인 알람은 리셋되지 않음' ($s1 -ge 0 -and $s1 -le 58 -and $s2 -ge 0 -and $s2 -le $s1) "before=$s1 after=$s2"
+        Edit-Alarm { param($c) Set-Toggle $c.Customs[0] }             # 커스텀 1 끄기 → 다음 알람은 경쿠(1시간)
+        $s3 = Get-NextSeconds
+        Check 'reset-rule: 항목을 끄면 남은 시간 표시가 다음 항목으로 바뀜' ($s3 -gt 3000 -and $s3 -le 3600) "label=$s3"
+        Edit-Alarm { param($c) Set-Toggle $c.Customs[0] }             # 다시 켜기 → 처음(60초)부터 다시 셈
+        $s4 = Get-NextSeconds
+        Check 'reset-rule: 껐다 켠 항목은 처음부터 다시 셈' ($s4 -ge 55 -and $s4 -le 60) "label=$s4"
+        Invoke-El $tb; $script:timerRunning5 = $false
+        Start-Sleep -Milliseconds 300
+    }
+    if ($script:timerRunning5) {
+        try { $tb = ((Get-Elements $main) | Where-Object { $_.Type -eq 'Button' } | Sort-Object L)[1]; Invoke-El $tb } catch { }
+        $script:timerRunning5 = $false
+    }
+    # 알람 설정값 복원 (8번 종료 후 설정 검사가 이전 상태를 기대함: 경쿠 꺼짐, 커스텀 1 = 123초)
+    Run-Safe 'alarm-restore' {
+        Edit-Alarm { param($c) if ((Get-Toggle $c.Check2) -eq 'On') { Set-Toggle $c.Check2 }; Set-EditValue $c.TickEdits[0] '123' }
+        $cfg = Read-Cfg
+        Check 'alarm-restore: 테스트용 알람 설정을 원래 값으로 되돌림' ($null -ne $cfg -and $cfg.customAlarms[0].tick -eq 123 -and $cfg.alarmEnabled[1] -eq $false -and $cfg.customAlarms[0].enabled -eq $true) ("tick=$($cfg.customAlarms[0].tick) a1=$($cfg.alarmEnabled[1]) c0=$($cfg.customAlarms[0].enabled)")
+    }
+    Close-AlarmIfOpen
+
     # ---------- 6. ▼ 메뉴 ----------
     if (-not $IncludeMenu) { Write-Host '[SKIP] menu/site: 팝업이 사용자 화면에 보일 수 있어 기본은 건너뜀 (-IncludeMenu로 실행)' }
     else {

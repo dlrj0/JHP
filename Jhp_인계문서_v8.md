@@ -346,6 +346,7 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 | Q1 릴리스 준비 | `<Version>` 단일 출처, `alarm/` 출력, `win-x64` 게시 프로필(`.gitignore`에 예외) | `JHP/JHP.csproj`, `Form1.cs`, `.gitignore` | `git revert` "[Q1]" |
 | Q2 업데이트 확인 | Octokit 제거 → HttpClient, `Config.SkippedVersion`, `Prompt.ShowYesNoCancel` | `JHP.Api/UpdateChecker.cs`, `Config.cs`, `Prompt.cs`, `Form1.cs` | `git revert` "[Q2]" (JHP.Api.csproj의 Octokit 참조 복원됨) |
 | Q3 저장 실패 대응 | `Config.Save()` bool 반환, `Config.SaveFailed` 이벤트(첫 실패 1회, 툴팁), `Config.DataDirectory`(exe 폴더 쓰기 불가 시 `%LOCALAPPDATA%\JHP`, 캐시도 동일), 잠김/읽기 전용 테스트 4항목 | `JHP.Api/Config.cs`, `Form1.cs`, `tools/ui-test.ps1` | `git revert` "[Q3]". 쓰기 불가 환경에서 만든 설정은 `%LOCALAPPDATA%\JHP\config.json`에 있음 |
+| Q4 테스트 확장 | 타이머 카운트다운/재충전/정지 시 `--:--`, 항목 껐다 켜기 리셋 규칙, 테스트 후 알람 설정 복원(57/57). 테스트 중 알람이 한 번 울림(4초 알람) | `tools/ui-test.ps1` | 앱 코드 변경 없음. 사이트 관리 메뉴(우클릭) 합성 검사는 미추가 |
 
 ### 다음 리셋 작업 큐 (2026-10-12 작성, 예약 작업 `JHP-Claude-Resume`이 이 순서로 진행)
 사용자 입력/육안 확인 없이 가능한 것만. 끝낸 항목은 `[x]`로 바꾸고 커밋 해시를 적습니다. 상세 지시는 `C:\Users\wjgus\.claude\jhp-resume-prompt.txt`.
@@ -353,7 +354,7 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 - [x] Q1 (커밋 해시는 `git log`의 "[Q1]") 릴리스 준비: `<Version>` 단일 출처 + `CurrentVersion`을 어셈블리 버전에서 읽기, `alarm/` 폴더 출력, 게시 프로필(self-contained win-x64). Release 생성은 하지 않음
 - [x] Q2 (커밋 "[Q2]") UpdateChecker: Octokit → HttpClient(타임아웃 5초), 프리릴리스/비정상 태그 비교 보강, "이 버전은 다시 묻지 않음"(`SkippedVersion`)
 - [x] Q3 ("[Q3]" 커밋) 설정 저장 실패 대응: `Save()` bool 반환 + 첫 실패 알림, 쓰기 불가 시 `%LOCALAPPDATA%\JHP\` 대체, WebView2 초기화 실패 메시지에 원인 포함, 잠긴/읽기 전용 설정 테스트
-- [ ] Q4 UI 테스트 갭: 알람 발화·남은 시간 라벨 카운트다운/재충전, 항목 껐다 켜기 리셋, 사이트 관리 메뉴(-IncludeMenu)
+- [x] Q4 ("[Q4]" 커밋; (c) 사이트 관리 메뉴 동작은 팝업 우클릭 합성이 불안정해 미추가 → 육안 확인) UI 테스트 갭: 알람 발화·남은 시간 라벨 카운트다운/재충전, 항목 껐다 켜기 리셋, 사이트 관리 메뉴(-IncludeMenu)
 - [ ] Q5 순수 로직 단위 테스트 프로젝트(`JHP.Tests`): Config/Site/SiteListOps/알람 틱 계산 (패키지 복원 안 되면 건너뜀)
 - [ ] Q6 다크 대화상자(`DarkMessageBox`)로 MessageBox 대체 (`ShowMessage`, SiteForm 오류, Prompt)
 - [ ] Q7 변경 전체 읽기 전용 서브에이전트 리뷰 → 실제 버그만 수정, 11장 갱신
