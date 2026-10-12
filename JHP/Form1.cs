@@ -457,10 +457,10 @@ public partial class Form1 : Form
             // 예상한 저장소 주소만 연다 (응답이 비정상이어도 임의의 주소/경로를 실행하지 않음)
             if (!url.StartsWith("https://github.com/dlrj0/JHP", StringComparison.OrdinalIgnoreCase)) return;
             var answer = Prompt.ShowYesNoCancel("업데이트 알림",
-                $"새 버전 {latest}이 있습니다.\n\n예: 다운로드 페이지 열기\n아니오: 나중에\n취소: 이 버전은 다시 묻지 않음", this);
+                $"새 버전 {latest}이 있습니다.\n\n예: 다운로드 페이지 열기\n아니오: 이 버전은 다시 묻지 않음\n취소(Esc): 나중에", this);
             if (answer == DialogResult.Yes)
                 Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-            else if (answer == DialogResult.Cancel)
+            else if (answer == DialogResult.No)
             {
                 _config.SkippedVersion = latest;
                 ScheduleSave();

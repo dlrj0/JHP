@@ -53,11 +53,12 @@ public static class DarkMessageBox
             };
             var label = new Label
             {
-                Text = text,
+                Text = text.Length > 600 ? text[..600] + "…" : text,   // 아주 긴 예외 메시지로 버튼이 화면 밖으로 밀리지 않게
                 AutoSize = true,
                 MaximumSize = new Size(420, 0),
                 MinimumSize = new Size(240, 0),
                 ForeColor = Color.White,
+                UseMnemonic = false,   // 주소의 &가 밑줄 단축키로 처리되지 않게
                 Margin = new Padding(0, 0, 0, 18),
             };
             var row = new FlowLayoutPanel

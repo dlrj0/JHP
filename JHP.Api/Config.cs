@@ -16,7 +16,7 @@ public class Config
     private static string ResolveDataDirectory()
     {
         string exeDir = AppContext.BaseDirectory;
-        if (CanWrite(exeDir)) return exeDir;
+        if (File.Exists(Path.Combine(exeDir, "config.json")) || CanWrite(exeDir)) return exeDir;   // 기존 설정이 있으면 일시적 쓰기 실패로 위치를 바꾸지 않는다
         try
         {
             string fallback = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JHP");
