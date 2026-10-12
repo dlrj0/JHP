@@ -37,7 +37,7 @@ dotnet build JHP/JHP.csproj                                         # 0 오류�
 dotnet test JHP.Tests/JHP.Tests.csproj                              # 단위 57개
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/ui-test.ps1 -OutDir <캡처폴더> [-SkipBuild] [-IncludeMenu]
 ```
-- 기준선(2026-10-12): 빌드 0 오류, 단위 57/57, UI 기본 약 57항목 / `-IncludeMenu` 74항목.
+- 기준선(2026-10-12): 빌드 0 오류, 단위 57/57, UI 기본 약 61항목 / `-IncludeMenu` 78항목(브라우저 기록 삭제 항목 포함).
 - `-IncludeMenu`는 메뉴 팝업이 사용자 화면에 잠깐 보이고 포커스를 건드릴 수 있어, 사용자가 요청할 때만 실행.
 - **알려진 불안정**: UI 테스트가 실행마다 다른 항목(숫자 입력, 읽기 전용/잠김 설정 종료, 타이머 색)에서 간헐적으로 실패하고 재실행하면 통과함. 사용자가 PC를 조작하지 않아도 발생 → 코드 회귀가 아니라 타이밍 문제로 추정, **원인 미확정**. 해결안: 스크립트에 구간 선택 옵션(`-Only`) 추가 후 실패 구간만 반복, 불안정한 검사에 대기/재시도 추가.
 - `tools/ui-test.ps1`: "alarm controls not found"는 FAIL로 기록, UIA 시간 초과는 SKIP(건수 표시). 컨트롤 이름/구조를 바꾸면 SKIP/FAIL을 확인할 것.

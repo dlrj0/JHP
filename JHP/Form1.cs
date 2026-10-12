@@ -877,8 +877,45 @@ public partial class Form1 : Form
         addItem.Click += (_, _) => AddSite();
         menu.Items.Add(addItem);
 
+        menu.Items.Add(new ToolStripSeparator());
+
+        // JHP 설정(사이트 목록, 알람 등)은 그대로 두고 웹 화면(브라우저)의 기록만 지운다
+        var clearItem = new ToolStripMenuItem("브라우저 기록 삭제…") { AutoSize = false, Size = new Size(itemWidth, itemHeight) };
+        clearItem.Click += (_, _) => BeginInvoke(ClearBrowserData);
+        menu.Items.Add(clearItem);
+
         menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
         menu.Show(btnMenu, new Point(0, btnMenu.Height));
+    }
+
+    // 방문/다운로드 기록, 자동완성(입력 기록), 캐시만 지운다. 로그인(쿠키)과 사이트 저장소는 지우지 않아 로그인 상태가 유지되고,
+    // JHP 설정(config.json: 사이트 목록·알람 등)은 건드리지 않는다.
+    private async void ClearBrowserData()
+    {
+        var profile = webView.CoreWebView2?.Profile;
+        if (profile is null) return;
+
+        var answer = ShowMessage(
+            "브라우저 기록을 삭제할까요?\n\n" +
+            "삭제: 방문 기록, 다운로드 기록, 자동완성(입력 기록), 캐시\n" +
+            "유지: 로그인 상태, 사이트 목록, 알람 등 JHP 설정\n\n" +
+            "유튜브 등 사이트 계정에 저장된 시청/검색 기록은 해당 사이트에서 따로 지워야 합니다.",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (answer != DialogResult.Yes) return;
+
+        try
+        {
+            await profile.ClearBrowsingDataAsync(
+                CoreWebView2BrowsingDataKinds.BrowsingHistory |
+                CoreWebView2BrowsingDataKinds.DownloadHistory |
+                CoreWebView2BrowsingDataKinds.GeneralAutofill |
+                CoreWebView2BrowsingDataKinds.DiskCache);
+            ShowMessage("브라우저 기록을 삭제했습니다.", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"브라우저 기록을 삭제하지 못했습니다.\n{ex.Message}",MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     // 같은 폴더에서 JHP를 다시 실행했을 때 호출된다: 최소화돼 있으면 직전 상태(일반/최대화)로 복원하고 앞으로 가져온다.
