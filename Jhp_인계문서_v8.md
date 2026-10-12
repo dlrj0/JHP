@@ -27,11 +27,11 @@
 |------|-----|
 | 목적 | 메이플스토리 재획비 타이머 + OTT/사이트 시청 보조 도구 |
 | 종류 | .NET 10.0 (net10.0-windows) WinForms + WebView2 |
-| 솔루션 | `JHP.slnx` (프로젝트 4개: `JHP`, `JHP.Api`, `JHP.Asset`, `JHP.Controls`) |
+| 솔루션 | `JHP.slnx` (프로젝트 5개: `JHP`, `JHP.Api`, `JHP.Asset`, `JHP.Controls`, `JHP.Tests`) |
 | 로컬 경로 | `C:\Users\wjgus\source\repos\dlrj0\JHP` |
 | GitHub | https://github.com/dlrj0/JHP (branch: `test`, 기본 브랜치: `main`) |
-| NuGet | Microsoft.Web.WebView2 1.0.4022.49, NAudio, Octokit, System.Speech |
-| 현재 버전 상수 | `JHP/Form1.cs` `CurrentVersion = "v1.1.0"` (CHANGELOG 반영, 릴리스 미생성) |
+| NuGet | Microsoft.Web.WebView2 1.0.4022.49, NAudio 2.3.0, System.Speech (테스트: xunit) |
+| 현재 버전 | `JHP/JHP.csproj`의 `<Version>1.1.0</Version>`이 단일 출처(`Form1.CurrentVersion`은 어셈블리 버전에서 읽음). CHANGELOG 반영, 릴리스 미생성 |
 
 ### 프로젝트 구조 (정리 후)
 
@@ -41,7 +41,7 @@ Jhp_인계문서_v8.md   ← 이 문서
 CHANGELOG.md / README.md / .gitignore
 alarm/                 ← mp3 알람 파일 (비어 있음, 사용자가 채움)
 JHP/                   ← 메인 WinForms (Form1, AlarmForm, SiteForm, Program, Resources)
-JHP.Api/               ← Config, CustomAlarm, Site, Synth, ReSize, Prompt, UpdateChecker
+JHP.Api/               ← Config, CustomAlarm, Site(+SiteListOps), Synth, ReSize, Prompt, DarkMessageBox, DarkTitleBar, UpdateChecker, AlarmScheduler
 JHP.Asset/             ← UserScripts (OTT 다음화 스킵 스크립트)
 JHP.Controls/          ← ControlButton, Timerbutton, DarkMenuRenderer, NSlider
 ```
@@ -152,9 +152,11 @@ await UpdateChecker.Check(string currentVersion);       // → (bool HasUpdate, 
 // Config (싱글톤, config.json 저장)
 Config.Instance.Width / Height / X / Y / Opacity / Volume / Rate / Tts / AlarmName
 Config.Instance.AlarmEnabled (bool[8]), CustomAlarms (List<CustomAlarm>, 3개)
-Config.Instance.TopMost / IsHideWindowBorderOnFocusOut / IsMaximize
-Config.Instance.Sites (List<Site>), DefaultSite, LatestUrl
-Config.Instance.Save();
+Config.Instance.TopMost / IsHideWindowBorderOnFocusOut / IsMaximize / MuteVideoOnAlarm / HotkeyEnabled
+Config.Instance.Sites (List<Site>), DefaultSite, LatestUrl, SkippedVersion
+Config.Instance.Save();                                  // bool 반환, 첫 실패 때만 Config.SaveFailed 이벤트
+Config.DataDirectory;                                    // 설정/캐시/error.log 폴더(exe 폴더, 쓰기 불가 시 %LOCALAPPDATA%\JHP)
+Config.Instance.ExportTo(path) / Config.ReadFrom(path) / Config.Instance.Replace(other)
 
 // Timerbutton (파일명 Timerbutton.cs)
 timerButton.Active      // true면 초록색
@@ -328,14 +330,14 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 - [리뷰 반영 2] 서브에이전트 리뷰(checkpoint-4 이후 diff) 5건 반영: 가져오기 시 알람창 닫기, `DefaultSite` 보정(Normalize), 시작 직후 두 번째 실행 신호 보존(`pendingShow`), 최소화 복원 시 직전 상태 사용(`BringToFrontFromAnotherInstance`), 메시지 상자를 `WithDialogState`로 감쌈. 되돌리기: `git revert` 해당 커밋
 - [AlarmForm 직접 배치] `Anchor=Right/Bottom` 제거 → `LayoutRightAligned()`(Resize/Shown에서 호출). 되돌리기: `git revert` 해당 커밋 (`JHP/AlarmForm.cs`)
 - [타이틀바 더블클릭 최대화] `pnlTitleBar`/`lblTitle` `MouseDoubleClick` → `btnMaximize.PerformClick()` (`JHP/Form1.cs`). 자동 검증 불가 → 사용자 육안 확인 필요. 되돌리기: `git revert` 해당 커밋
-- [전역 단축키] `RegisterHotKey`(Ctrl+Alt+J), `Config.HotkeyEnabled`(기본 false), ▼ 메뉴 체크. `Form1.WndProc`의 WM_HOTKEY → `ToggleTimer`. 되돌리기: `git revert` 해당 커밋. 실제 키 입력은 사용자 PC를 건드리므로 자동 검증하지 않음 → 사용자 확인 필요(조합 변경 희망 시 `VK_J`)
+- [전역 단축키] `RegisterHotKey`(처음 구현은 Ctrl+Alt+J → 아래 "단축키 조합 변경"으로 **Ctrl+Alt+Shift+F10**), `Config.HotkeyEnabled`(기본 false), ▼ 메뉴 체크. `Form1.WndProc`의 WM_HOTKEY → `ToggleTimer`. 되돌리기: `git revert` 해당 커밋. 실제 키 입력은 사용자 PC를 건드리므로 자동 검증하지 않음 → 사용자 확인 필요(조합 변경 희망 시 `VK_J`)
 
 ### 게임 안전 원칙 (사용자 요구, 2026-10-12)
 - 목적: 메이플 사냥 중 같이 쓰는 프로그램이므로 **게임 제재 사유가 되면 안 됨**. 현재 코드에는 `SendInput`/후킹/메모리 접근/프로세스·창 열거/화면 캡처/주입이 **없음**(2026-10-12 grep 확인). 외부 통신은 WebView2(사용자가 연 사이트)와 업데이트 확인(GitHub)뿐.
-- 전역 단축키(Ctrl+Alt+J)는 `RegisterHotKey`만 사용(키 후킹 아님). 기본 꺼짐, 켠 사람만 동작. 이 조합은 시스템 전체에서 다른 프로그램(게임 포함)에 전달되지 않으므로, 게임에서 쓰는 키와 겹치면 안 됨. 조합을 자유 입력으로 바꾸게 하지 않고 고정 조합 또는 소수의 프리셋만 허용할 것(기능 요청이 오면 이 원칙을 먼저 설명).
+- 전역 단축키(Ctrl+Alt+Shift+F10)는 `RegisterHotKey`만 사용(키 후킹 아님). 기본 꺼짐, 켠 사람만 동작. 이 조합은 시스템 전체에서 다른 프로그램(게임 포함)에 전달되지 않으므로, 게임에서 쓰는 키와 겹치면 안 됨. 조합을 자유 입력으로 바꾸게 하지 않고 고정 조합 또는 소수의 프리셋만 허용할 것(기능 요청이 오면 이 원칙을 먼저 설명).
 - 새 기능을 넣을 때마다 위 목록(게임 프로세스를 읽거나 건드리는 기능)에 해당하지 않는지 확인합니다. 제재 여부는 넥슨의 정책에 달려 있어 코드로 보장할 수는 없으며, 보수적으로 "게임을 전혀 건드리지 않는다"를 유지합니다.
 - [새 창 정책] `NewWindowRequested`: 사용자 조작 + 크기/위치 미지정 + http(s)면 같은 창에서 Navigate. OAuth 등 팝업은 건드리지 않음. 실제 사이트에서의 동작은 자동 검증 불가 → 사용자 확인 필요(문제 시 `Form1.InitWV`의 핸들러만 제거). 되돌리기: `git revert` 해당 커밋
-- [메뉴 정리] ▼ 메뉴에 구분선 추가, 단축키 문구를 `전역 단축키 (Ctrl+Alt+J)`로 축소(설명은 `ToolTipText`). `ui-test.ps1`의 메뉴 항목 이름도 같이 변경. 되돌리기: `git revert` 해당 커밋
+- [메뉴 정리] ▼ 메뉴에 구분선 추가, 단축키 문구를 `전역 단축키 (Ctrl+Alt+J)`(→ 이후 Ctrl+Alt+Shift+F10으로 변경)로 축소(설명은 `ToolTipText`). `ui-test.ps1`의 메뉴 항목 이름도 같이 변경. 되돌리기: `git revert` 해당 커밋
 - [단축키 조합 변경] 게임 점검 지적(Ctrl=공격, Alt=점프, J=스킬 키와 겹쳐 입력 소실·오타이머 토글 위험)을 반영해 Ctrl+Alt+J → **Ctrl+Alt+Shift+F10**, 토글 시 TTS 음성 안내 추가. 되돌리기: `git revert` 해당 커밋
 - [UI 점검 반영] 서브에이전트 UI/UX 점검 결과 중 효과가 분명한 항목 반영(`Form1.cs`, `AlarmForm.cs`, `SiteForm.cs`, `NSlider.cs`, `Timerbutton.cs`): 남은 시간 라벨(`lblNext`), 클릭/드래그 후 `webView.Focus()`(`NSlider.DragCompleted`), 사이트 ✕ 삭제 확인, 알람창 NSlider 교체·세로 고정·`ShowInTaskbar=false`·테두리, 입력칸 라벨 가림. 되돌리기: `git revert` 해당 커밋
 - 보류(의도 확인 필요): '다른 창 선택 시 테두리 안보이기'가 타이틀바를 `Visible=false`로 숨겨 웹 화면이 36px 이동하는 점(원본 동작 의도일 수 있음), 메뉴/MessageBox 다크화(Prompt 커스텀 폼 필요), 창 버튼 전체 높이화

@@ -16,7 +16,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\ui-test.ps1 -OutDir <�
 ```
 - UI 테스트는 별도 폴더의 인스턴스를 띄우고 창 메시지/UI Automation으로 조작합니다. 캡처는 PrintWindow.
 - 테스트 창은 기본적으로 환경 변수 `JHP_OFFSCREEN=1`로 화면 밖(-20000,0)에 뜹니다(편의 설정). ▼ 메뉴 팝업은 화면 가장자리에 잠깐 보이므로 기본은 건너뛰고 `-IncludeMenu`일 때만 검사합니다. 작업 중 창이 잠깐 뜨는 것은 괜찮지만, **작업/확인이 끝나면 반드시 최소화하거나 화면에서 치웁니다**(다른 사람이 PC 화면을 볼 수 있음).
-- 단위 테스트: `dotnet test JHP.Tests/JHP.Tests.csproj` (순수 로직: Config/Site/UpdateChecker)
+- 단위 테스트: `dotnet test JHP.Tests/JHP.Tests.csproj` (57개; 순수 로직: AlarmScheduler/Config/Site·SiteListOps/UpdateChecker/DarkMessageBox)
 - 사용자가 쓰는 JHP가 실행 중이면 `JHP/bin`의 DLL이 잠겨 빌드가 실패합니다. 이때는 `-p:OutDir=<다른 폴더>\`로 빌드하세요.
 
 ## 반드시 지킬 것
@@ -32,7 +32,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\ui-test.ps1 -OutDir <�
 - **Anchor=Right 금지**(부모 기본 폭 기준으로 계산돼 어긋남). 창 버튼 등은 `LayoutTitleBar()`처럼 직접 배치.
 - 커스텀 그리기 컨트롤은 **불투명하게** 칠함(투명 브러시 + 더블버퍼는 검정으로 보임). 호버는 `_hovered`(MouseEnter/Move/Leave)로 추적.
 - 메인 창의 리사이즈는 가장자리 패널 + `WM_NCLBUTTONDOWN` 방식(WebView가 가장자리를 덮어 `WM_NCHITTEST`가 폼에 도달하지 않음).
-- 설정/알람 파일 경로는 `AppContext.BaseDirectory` 기준(작업 디렉터리 기준 금지).
+- 설정·캐시·error.log는 `Config.DataDirectory`(exe 폴더, 쓰기 불가 시 `%LOCALAPPDATA%\JHP`), `alarm/`은 `AppContext.BaseDirectory` 기준(작업 디렉터리 기준 금지).
 - 알람 TTS 이름은 원본 항목명(재획비, 경쿠, 경뿌/경쿠/유니온, 유니온 버프, 메소 회수, 파운틴). 겹치면 목록 위쪽 하나만 출력.
 
 ## 환경 메모
