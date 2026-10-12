@@ -56,7 +56,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/ui-test.ps1 -OutDir <�
 | 항목 | 상태/필요한 것 |
 |---|---|
 | **넷플릭스 건너뛰기 검증** | 요소 확인됨: `button[data-uia="player-skip-intro"]`(부모 `.watch-video--skip-content`), 크레딧 구간 `next-episode-seamless-button-draining`/`watch-credits-seamless-button`. 감시 스크립트(`MutationObserver`)로 변경했으나 **JHP 안에서 실제로 넘어가는지 미확인** → 사용자 확인 필요. 다음 화 버튼의 클릭 동작 상세도 미확인 |
-| 라프텔 다음화 | `[data-testid="next-episode-button"]`는 검증된 적 없음(1회 클릭 방식 그대로). 로그인/재생 화면 DOM 필요 |
 | UI 테스트 안정화 | 3장 참고(구간 선택 옵션 + 대기/재시도) |
 | 육안·청취 확인 | 알람 소리/TTS, 125%/150% 배율, 호버 색, 우클릭 관리 메뉴, 더블클릭 최대화, 단축키, 전체화면/팝업 차단, 새 다크 대화상자 |
 | 설계 결정 | PerMonitorV2(혼합 배율에서 흐려짐), 테두리 숨김 시 웹 36px 이동, 키보드만으로 ▼ 메뉴 접근, 절전 복귀 정책, 알람 미리 알림, 기본 알람 mp3 동봉(저작권) |

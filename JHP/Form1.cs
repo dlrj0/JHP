@@ -472,9 +472,7 @@ public partial class Form1 : Form
 
         try
         {
-            if (HostIs(host, "laftel.net"))
-                await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.LaftelSkipNext);
-            else if (HostIs(host, "netflix.com"))
+            if (HostIs(host, "netflix.com"))
                 await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.NetflixSkipNext);
         }
         catch { }

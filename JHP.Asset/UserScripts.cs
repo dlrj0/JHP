@@ -2,13 +2,6 @@
 
 public static class UserScripts
 {
-    public const string LaftelSkipNext = """
-        (function() {
-            const btn = document.querySelector('[data-testid="next-episode-button"]');
-            if (btn) btn.click();
-        })();
-        """;
-
     // 넷플릭스는 페이지 이동 없이 화면만 바뀌는 SPA이고, 건너뛰기 버튼은 재생 중 특정 시점에 나타났다 사라진다.
     // 로드 시 한 번만 찾으면 대부분 버튼이 아직 없으므로, 한 번 설치해 두고 DOM 변화를 계속 감시한다.
     // 확인된 요소(2026-10-12, 넷플릭스 재생 화면 DOM):
