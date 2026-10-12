@@ -35,4 +35,10 @@ public static class Prompt
         return MessageBox.Show(owner, message, title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question)
                == DialogResult.OK;
     }
+
+    // 예 / 아니오 / 취소 다이얼로그
+    public static DialogResult ShowYesNoCancel(string title, string message, IWin32Window? owner = null)
+    {
+        return MessageBox.Show(owner, message, title, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+    }
 }

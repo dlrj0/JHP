@@ -343,11 +343,14 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 - 보류(설계 판단 필요): 절전 복귀 후 타이머 정지/보정 방식(현재 120초 초과 시 재동기화), PerMonitorV2 DPI 모드 전환(전 화면 재검증 필요), 커스텀 알람 최소 초, 알람 PlaybackFinished 세대 번호, 알람 발화 단위 테스트
 - [잔여 점검 반영] `Synth._generation`(재생 세대 번호), `DarkTitleBar`(DWM 다크 타이틀바, SiteForm), 메뉴 구분선/`IsOnScreen` DPI 환산. 되돌리기: `git revert` 해당 커밋 (새 파일 `JHP/DarkTitleBar.cs`)
 
+| Q1 릴리스 준비 | `<Version>` 단일 출처, `alarm/` 출력, `win-x64` 게시 프로필(`.gitignore`에 예외) | `JHP/JHP.csproj`, `Form1.cs`, `.gitignore` | `git revert` "[Q1]" |
+| Q2 업데이트 확인 | Octokit 제거 → HttpClient, `Config.SkippedVersion`, `Prompt.ShowYesNoCancel` | `JHP.Api/UpdateChecker.cs`, `Config.cs`, `Prompt.cs`, `Form1.cs` | `git revert` "[Q2]" (JHP.Api.csproj의 Octokit 참조 복원됨) |
+
 ### 다음 리셋 작업 큐 (2026-10-12 작성, 예약 작업 `JHP-Claude-Resume`이 이 순서로 진행)
 사용자 입력/육안 확인 없이 가능한 것만. 끝낸 항목은 `[x]`로 바꾸고 커밋 해시를 적습니다. 상세 지시는 `C:\Users\wjgus\.claude\jhp-resume-prompt.txt`.
 
 - [x] Q1 (커밋 해시는 `git log`의 "[Q1]") 릴리스 준비: `<Version>` 단일 출처 + `CurrentVersion`을 어셈블리 버전에서 읽기, `alarm/` 폴더 출력, 게시 프로필(self-contained win-x64). Release 생성은 하지 않음
-- [ ] Q2 UpdateChecker: Octokit → HttpClient(타임아웃 5초), 프리릴리스/비정상 태그 비교 보강, "이 버전은 다시 묻지 않음"(`SkippedVersion`)
+- [x] Q2 (커밋 "[Q2]") UpdateChecker: Octokit → HttpClient(타임아웃 5초), 프리릴리스/비정상 태그 비교 보강, "이 버전은 다시 묻지 않음"(`SkippedVersion`)
 - [ ] Q3 설정 저장 실패 대응: `Save()` bool 반환 + 첫 실패 알림, 쓰기 불가 시 `%LOCALAPPDATA%\JHP\` 대체, WebView2 초기화 실패 메시지에 원인 포함, 잠긴/읽기 전용 설정 테스트
 - [ ] Q4 UI 테스트 갭: 알람 발화·남은 시간 라벨 카운트다운/재충전, 항목 껐다 켜기 리셋, 사이트 관리 메뉴(-IncludeMenu)
 - [ ] Q5 순수 로직 단위 테스트 프로젝트(`JHP.Tests`): Config/Site/SiteListOps/알람 틱 계산 (패키지 복원 안 되면 건너뜀)

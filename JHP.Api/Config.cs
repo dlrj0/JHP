@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace JHP.Api;
@@ -49,6 +49,7 @@ public class Config
         new CustomAlarm(), new CustomAlarm(), new CustomAlarm()
     ];
     public string LatestUrl { get; set; } = "";
+    public string SkippedVersion { get; set; } = "";   // "이 버전은 다시 묻지 않음"으로 건너뛴 업데이트 태그
 
     // 읽기 실패(잠김 등) 때문에 기본값으로 시작한 경우 true — 이때 Save()가 정상 파일을 덮어쓰지 않게 한다
     private static bool _loadFailed;
@@ -132,6 +133,7 @@ public class Config
         if (!Sites.Any(s => s.Name == DefaultSite)) DefaultSite = ""; // 목록에 없는 이름이 남지 않게
         AlarmName ??= "";
         LatestUrl ??= "";
+        SkippedVersion ??= "";
 
         var enabled = new bool[8];
         if (AlarmEnabled is not null)
@@ -205,5 +207,6 @@ public class Config
         Tts = other.Tts;
         CustomAlarms = other.CustomAlarms;
         LatestUrl = other.LatestUrl;
+        SkippedVersion = other.SkippedVersion;
     }
-}
+}

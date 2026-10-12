@@ -441,10 +441,18 @@ public partial class Form1 : Form
         {
             var (hasUpdate, latest, url) = await UpdateChecker.Check(CurrentVersion);
             if (!hasUpdate || string.IsNullOrWhiteSpace(url)) return;
+            if (string.Equals(_config.SkippedVersion, latest, StringComparison.OrdinalIgnoreCase)) return;
             // 예상한 저장소 주소만 연다 (응답이 비정상이어도 임의의 주소/경로를 실행하지 않음)
             if (!url.StartsWith("https://github.com/dlrj0/JHP", StringComparison.OrdinalIgnoreCase)) return;
-            if (Prompt.ShowDialog("업데이트 알림", $"새 버전 {latest}이 있습니다. 다운로드 페이지를 여시겠습니까?", this))
+            var answer = Prompt.ShowYesNoCancel("업데이트 알림",
+                $"새 버전 {latest}이 있습니다.\n\n예: 다운로드 페이지 열기\n아니오: 나중에\n취소: 이 버전은 다시 묻지 않음", this);
+            if (answer == DialogResult.Yes)
                 Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            else if (answer == DialogResult.Cancel)
+            {
+                _config.SkippedVersion = latest;
+                ScheduleSave();
+            }
         }
         catch { } // 업데이트 확인 실패가 앱 동작에 영향을 주지 않도록 한다
     }
