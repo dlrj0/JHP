@@ -399,9 +399,6 @@ public partial class Form1 : Form
                     ScheduleSave();
                 }
             };
-            // 리애니메처럼 로드가 끝나지 않는(readyState가 interactive에 머무는) 사이트는 NavigationCompleted가 오지 않으므로
-            // DOM이 준비되는 시점에도 한 번 주입한다. 다른 사이트 스크립트는 중복 실행되면 안 되므로 여기서는 제외.
-            webView.CoreWebView2.DOMContentLoaded += (_, _) => InjectJS(domReadyOnly: true);
             // 링크 클릭으로 열리는 새 창(target=_blank)은 별도 창 대신 이 창에서 연다.
             // 크기/위치를 지정한 팝업(window.open 기능 지정: 로그인 등 opener가 필요한 창)은 기본 동작을 유지한다.
             webView.CoreWebView2.NewWindowRequested += (_, e) =>
@@ -462,7 +459,7 @@ public partial class Form1 : Form
     }
 
     // 🔴 버그 수정: about:blank 또는 null Source일 때 Uri 생성 예외가 나던 부분 → null 체크 + try/catch
-    private async void InjectJS(bool domReadyOnly = false)
+    private async void InjectJS()
     {
         if (webView.CoreWebView2 is null) return;
 
@@ -475,22 +472,10 @@ public partial class Form1 : Form
 
         try
         {
-            if (domReadyOnly)
-            {
-                if (HostIs(host, "reanime.to"))
-                    await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.ReanimeAutoOptions);
-                else if (HostIs(host, "miruro.to"))
-                    await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.MiruroAutoOptions);
-                return;
-            }
             if (HostIs(host, "laftel.net"))
                 await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.LaftelSkipNext);
             else if (HostIs(host, "netflix.com"))
                 await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.NetflixSkipNext);
-            else if (HostIs(host, "reanime.to"))
-                await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.ReanimeAutoOptions);
-            else if (HostIs(host, "miruro.to"))
-                await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.MiruroAutoOptions);
         }
         catch { }
     }

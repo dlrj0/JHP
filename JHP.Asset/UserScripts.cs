@@ -9,50 +9,6 @@ public static class UserScripts
         })();
         """;
 
-    // 리애니메/미루로는 사이트 자체에 자동 재생/다음 화/건너뛰기 토글이 있다(확인 2026-10-12, 재생 페이지 DOM).
-    //   - 리애니메(reanime.to): 버튼 aria-label "Auto Play" / "Auto Next" / "Auto Skip Intro & Outro", 켜짐=class "text-primary",
-    //     설정은 localStorage "project_r_prefs"(autoPlay/autoNext/skipIntro/skipOutro)
-    //   - 미루로(miruro.to): 버튼 "Autoplay" / "Auto Skip" / "Auto Next", 켜짐=aria-pressed="true",
-    //     설정은 localStorage "miruro:settings"(autoPlay/autoSkip/autoNext)
-    // 영상은 iframe 안이라 직접 누르지 않고, 꺼진 토글만 한 번 켠다. 이후 사용자가 직접 끈 설정은 건드리지 않는다.
-    public static readonly string ReanimeAutoOptions =
-        BuildAutoToggleScript("reanime", "Auto Play", "Auto Next", "Auto Skip Intro & Outro");
-
-    public static readonly string MiruroAutoOptions =
-        BuildAutoToggleScript("miruro", "Autoplay", "Auto Skip", "Auto Next");
-
-    private static string BuildAutoToggleScript(string site, params string[] labels)
-    {
-        string labelsJson = "[" + string.Join(",", labels.Select(l => "\"" + l.Replace("\"", "\\\"") + "\"")) + "]";
-        return """
-        (function() {
-            const SITE = '__SITE__';
-            const FLAG = '__jhpAutoOpts_' + SITE;
-            if (window[FLAG]) return;
-            window[FLAG] = true;
-            const KEY = 'jhp_' + SITE + '_opts_done';
-            try { if (localStorage.getItem(KEY)) return; } catch (e) { return; }
-            const labels = __LABELS__;
-            const find = l => [...document.querySelectorAll('button')]
-                .find(b => (b.getAttribute('aria-label') || b.innerText || '').trim() === l);
-            const isOn = b => b.getAttribute('aria-pressed') === 'true' || /(^|\s)text-primary(\s|$)/.test(b.className);
-            // 서버에서 그려진 버튼은 페이지 스크립트가 준비되기 전에는 눌러도 반응이 없고, SPA라 재생 페이지는 나중에 나타날 수도 있으므로
-            // 토글이 실제로 켜진 것을 확인할 때까지 주기적으로 다시 시도하고, 확인되면 완료로 표시한다.
-            const timer = setInterval(() => {
-                const btns = labels.map(find);
-                if (btns.some(b => !b)) return;
-                const off = btns.filter(b => !isOn(b));
-                if (off.length === 0) {
-                    try { localStorage.setItem(KEY, '1'); } catch (e) { }
-                    clearInterval(timer);
-                    return;
-                }
-                off.forEach(b => b.click());
-            }, 1000);
-        })();
-        """.Replace("__SITE__", site).Replace("__LABELS__", labelsJson);
-    }
-
     // 넷플릭스는 페이지 이동 없이 화면만 바뀌는 SPA이고, 건너뛰기 버튼은 재생 중 특정 시점에 나타났다 사라진다.
     // 로드 시 한 번만 찾으면 대부분 버튼이 아직 없으므로, 한 번 설치해 두고 DOM 변화를 계속 감시한다.
     // 확인된 요소(2026-10-12, 넷플릭스 재생 화면 DOM):
@@ -77,4 +33,4 @@ public static class UserScripts
             click();
         })();
         """;
-}
+}

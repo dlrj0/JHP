@@ -56,8 +56,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/ui-test.ps1 -OutDir <�
 | 항목 | 상태/필요한 것 |
 |---|---|
 | **넷플릭스 건너뛰기 검증** | 요소 확인됨: `button[data-uia="player-skip-intro"]`(부모 `.watch-video--skip-content`), 크레딧 구간 `next-episode-seamless-button-draining`/`watch-credits-seamless-button`. 감시 스크립트(`MutationObserver`)로 변경했으나 **JHP 안에서 실제로 넘어가는지 미확인** → 사용자 확인 필요. 다음 화 버튼의 클릭 동작 상세도 미확인 |
-| 미루로 | `UserScripts.MiruroAutoOptions`(리애니메와 같은 `BuildAutoToggleScript`): 버튼 `Autoplay`/`Auto Skip`/`Auto Next`, 켜짐=`aria-pressed="true"`, 설정 localStorage `miruro:settings`. JHP(WebView2, CDP)에서 3개 켜짐 확인. 자동 다음 화 동작은 사용자 확인 필요 |
-| 리애니메 | `UserScripts.ReanimeAutoOptions`: 사이트 자체 토글(aria-label Auto Play/Auto Next/Auto Skip Intro & Outro, 켜짐=`text-primary`, 설정은 localStorage `project_r_prefs`)을 최초 1회 켬(`jhp_reanime_opts_done`). 이 사이트는 로드가 `interactive`에서 끝나지 않아 `NavigationCompleted`가 오지 않으므로 `DOMContentLoaded`에서도 주입하고(`InjectJS(domReadyOnly)`), 서버 렌더 버튼은 준비 전엔 클릭이 무시되어 켜진 것을 확인할 때까지 1초 간격으로 재시도한다. JHP(WebView2, CDP로 확인)에서 토글 3개 켜짐·`project_r_prefs` 저장 확인, **영상이 실제로 다음 화로 넘어가는지는 사용자 확인 필요**. 영상은 iframe 안이라 직접 클릭하지 않음 |
 | 라프텔 다음화 | `[data-testid="next-episode-button"]`는 검증된 적 없음(1회 클릭 방식 그대로). 로그인/재생 화면 DOM 필요 |
 | UI 테스트 안정화 | 3장 참고(구간 선택 옵션 + 대기/재시도) |
 | 육안·청취 확인 | 알람 소리/TTS, 125%/150% 배율, 호버 색, 우클릭 관리 메뉴, 더블클릭 최대화, 단축키, 전체화면/팝업 차단, 새 다크 대화상자 |
