@@ -602,7 +602,7 @@ public partial class Form1 : Form
                 SiteListOps.DisplayName(_config.Sites, i, _config.DefaultSite), menu.Font).Width);
         textWidth = Math.Max(textWidth, TextRenderer.MeasureText("다른 창 선택 시 테두리 안보이기", menu.Font).Width);
         textWidth = Math.Max(textWidth, TextRenderer.MeasureText("알람 울릴 때 영상 음소거", menu.Font).Width);
-        textWidth = Math.Max(textWidth, TextRenderer.MeasureText("전역 단축키 (Ctrl+Alt+J: 타이머 시작/정지)", menu.Font).Width);
+        textWidth = Math.Max(textWidth, TextRenderer.MeasureText("전역 단축키 (Ctrl+Alt+J)", menu.Font).Width);
         int itemWidth = textWidth + (int)(70 * DeviceDpi / 96f);
         int itemHeight = menu.Font.Height + (int)(14 * DeviceDpi / 96f); // AutoSize=false 항목은 높이를 직접 지정해야 배율에서 글자가 잘리지 않는다
 
@@ -650,8 +650,9 @@ public partial class Form1 : Form
         };
         menu.Items.Add(muteItem);
 
-        var hotkeyItem = new ToolStripMenuItem("전역 단축키 (Ctrl+Alt+J: 타이머 시작/정지)")
+        var hotkeyItem = new ToolStripMenuItem("전역 단축키 (Ctrl+Alt+J)")
         {
+            ToolTipText = "다른 프로그램을 쓰는 중에도 Ctrl+Alt+J로 타이머를 시작/정지합니다",
             CheckOnClick = true,
             Checked = _config.HotkeyEnabled,
             AutoSize = false,
@@ -664,6 +665,7 @@ public partial class Form1 : Form
             _config.Save();
         };
         menu.Items.Add(hotkeyItem);
+        menu.Items.Add(new ToolStripSeparator());   // 토글 옵션 | 설정 백업/복원 | 사이트 목록
 
         var exportItem = new ToolStripMenuItem("설정 내보내기…") { AutoSize = false, Size = new Size(itemWidth, itemHeight) };
         exportItem.Click += (_, _) => BeginInvoke(ExportSettings);
