@@ -43,7 +43,7 @@ alarm/                 ← mp3 알람 파일 (비어 있음, 사용자가 채움
 JHP/                   ← 메인 WinForms (Form1, AlarmForm, SiteForm, Program, Resources)
 JHP.Api/               ← Config, CustomAlarm, Site, Synth, ReSize, Prompt, UpdateChecker
 JHP.Asset/             ← UserScripts (OTT 다음화 스킵 스크립트)
-JHP.Controls/          ← ControlButton, Timerbutton, DarkMenuRenderer, NSlider, CustomCheckBox
+JHP.Controls/          ← ControlButton, Timerbutton, DarkMenuRenderer, NSlider
 ```
 
 > 솔루션 이름과 UI 프로젝트 이름이 둘 다 "JHP"입니다. 경로는 `JHP\JHP\JHP.csproj`입니다.
@@ -271,7 +271,7 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 | 슬라이더를 끌 때마다 config.json 쓰기 | 400ms 디바운스 저장(`ScheduleSave`), 종료 시 저장은 그대로 |
 | 설정 파일 손상 시 다음 저장에서 사용자 설정이 사라짐 / 저장 중 종료 시 반쯤 써진 파일 | 임시 파일 교체 저장, 파싱 실패 시 `.corrupt` 사본 보존 |
 - 검증: 빌드 0 오류, `tools/ui-test.ps1` 27/27 통과(입력 즉시 반영·아이콘은 자동 검증 항목 없음 → 사용자 육안 확인 권장).
-- 아직 안 한 후보: 단축키(키 조합 사용자 결정 필요), 새 창(window.open) 처리 정책(OAuth 팝업 위험, 사용자 결정 필요), 설정 내보내기/가져오기, 알람 미리 알림. (단일 인스턴스 안내는 완료)
+- 이후 처리됨: 단축키(옵트인, Ctrl+Alt+Shift+F10), 새 창 정책(링크 새 창만 같은 창), 설정 내보내기/가져오기, 단일 인스턴스 안내. 아직 안 한 것: 알람 미리 알림(원본에 없는 확장), MessageBox/Prompt 다크화, PerMonitorV2 전환.
 
 ### 변경 이력 (되돌리기용)
 기능이 사라지거나 동작이 달라졌을 때 아래 항목 단위로 되돌립니다. 커밋 해시는 `git log --oneline`에서 해당 요약으로 찾고, `git revert <해시>`(이력 보존) 또는 문제 파일만 `git checkout <이전해시> -- <파일>`로 복구합니다.
