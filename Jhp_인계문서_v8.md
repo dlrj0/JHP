@@ -339,3 +339,5 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 - [단축키 조합 변경] 게임 점검 지적(Ctrl=공격, Alt=점프, J=스킬 키와 겹쳐 입력 소실·오타이머 토글 위험)을 반영해 Ctrl+Alt+J → **Ctrl+Alt+Shift+F10**, 토글 시 TTS 음성 안내 추가. 되돌리기: `git revert` 해당 커밋
 - [UI 점검 반영] 서브에이전트 UI/UX 점검 결과 중 효과가 분명한 항목 반영(`Form1.cs`, `AlarmForm.cs`, `SiteForm.cs`, `NSlider.cs`, `Timerbutton.cs`): 남은 시간 라벨(`lblNext`), 클릭/드래그 후 `webView.Focus()`(`NSlider.DragCompleted`), 사이트 ✕ 삭제 확인, 알람창 NSlider 교체·세로 고정·`ShowInTaskbar=false`·테두리, 입력칸 라벨 가림. 되돌리기: `git revert` 해당 커밋
 - 보류(의도 확인 필요): '다른 창 선택 시 테두리 안보이기'가 타이틀바를 `Visible=false`로 숨겨 웹 화면이 36px 이동하는 점(원본 동작 의도일 수 있음), 메뉴/MessageBox 다크화(Prompt 커스텀 폼 필요), 창 버튼 전체 높이화
+- [견고성 점검 반영] 서브에이전트 버그 점검 결과 반영: Config 잠김 시 덮어쓰기 방지(`_loadFailed`)·`.corrupt` 타임스탬프 보관, 내보내기 URL 쿼리 제거, TTS 출력 장치 재연결, 업데이트 URL 검증, 렌더러 복구 횟수 제한, 사이트 이름 `MaxLength=40`, ▼ '알람 설정…', 접근성 이름, 알람창 위치 클램프. 되돌리기: `git revert` 해당 커밋
+- 보류(설계 판단 필요): 절전 복귀 후 타이머 정지/보정 방식(현재 120초 초과 시 재동기화), PerMonitorV2 DPI 모드 전환(전 화면 재검증 필요), 커스텀 알람 최소 초, 알람 PlaybackFinished 세대 번호, 알람 발화 단위 테스트

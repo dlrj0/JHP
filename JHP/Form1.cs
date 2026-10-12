@@ -188,6 +188,14 @@ public partial class Form1 : Form
         };
         timerButton.RightClick += (_, _) => OpenAlarmSettings();
         SetTimerTip("클릭하여 타이머 시작\n우클릭: 알람 설정");
+        // 스크린리더/UI Automation에 보이는 이름
+        btnMenu.AccessibleName = "사이트 목록 및 설정 메뉴";
+        timerButton.AccessibleName = "재획비 타이머";
+        btnMinimize.AccessibleName = "최소화";
+        btnMaximize.AccessibleName = "최대화 또는 이전 크기";
+        btnClose.AccessibleName = "닫기";
+        sliderVolume.AccessibleName = "볼륨";
+        sliderOpacity.AccessibleName = "투명도";
         toolTip.SetToolTip(btnMenu, "사이트 목록 / 설정");
         toolTip.SetToolTip(btnMinimize, "최소화");
         toolTip.SetToolTip(btnMaximize, "최대화 / 이전 크기");
@@ -370,7 +378,9 @@ public partial class Form1 : Form
             // 렌더러 프로세스가 죽으면 빈 화면으로 남으므로 새로고침한다
             webView.CoreWebView2.ProcessFailed += (_, e) =>
             {
-                if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.RenderProcessExited)
+                // 종료 중이 아니고, 반복 실패로 무한 새로고침되지 않도록 횟수를 제한한다
+                if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.RenderProcessExited
+                    && !IsDisposed && IsHandleCreated && _renderRecoveries++ < 5)
                     BeginInvoke(() => webView.CoreWebView2?.Reload());
             };
             webView.CoreWebView2.Navigate(ResolveStartUrl());
@@ -381,6 +391,8 @@ public partial class Form1 : Form
                 "오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
+
+    private int _renderRecoveries;
 
     private string ResolveStartUrl()
     {
@@ -426,6 +438,8 @@ public partial class Form1 : Form
         {
             var (hasUpdate, latest, url) = await UpdateChecker.Check(CurrentVersion);
             if (!hasUpdate || string.IsNullOrWhiteSpace(url)) return;
+            // 예상한 저장소 주소만 연다 (응답이 비정상이어도 임의의 주소/경로를 실행하지 않음)
+            if (!url.StartsWith("https://github.com/dlrj0/JHP", StringComparison.OrdinalIgnoreCase)) return;
             if (Prompt.ShowDialog("업데이트 알림", $"새 버전 {latest}이 있습니다. 다운로드 페이지를 여시겠습니까?", this))
                 Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
         }
@@ -607,7 +621,11 @@ public partial class Form1 : Form
         form.StartPosition = FormStartPosition.Manual;
         form.Show(this);
         // 배율이 적용된 뒤 크기를 기준으로 메인 창 가운데에 배치 (CenterParent는 배율 적용 전 크기로 계산돼 어긋남)
-        form.Location = new Point(Left + (Width - form.Width) / 2, Top + (Height - form.Height) / 2);
+        var wa = Screen.FromControl(this).WorkingArea;
+        int fx = Left + (Width - form.Width) / 2, fy = Top + (Height - form.Height) / 2;
+        form.Location = new Point(                                      // 작은 화면/가장자리에서 버튼이 화면 밖으로 나가지 않게
+            Math.Clamp(fx, wa.Left, Math.Max(wa.Left, wa.Right - form.Width)),
+            Math.Clamp(fy, wa.Top, Math.Max(wa.Top, wa.Bottom - form.Height)));
     }
 
     private void ApplyAlarmSettings()
@@ -716,6 +734,10 @@ public partial class Form1 : Form
         };
         menu.Items.Add(hotkeyItem);
         menu.Items.Add(new ToolStripSeparator());   // 토글 옵션 | 설정 백업/복원 | 사이트 목록
+
+        var alarmItem = new ToolStripMenuItem("알람 설정…") { AutoSize = false, Size = new Size(itemWidth, itemHeight) };
+        alarmItem.Click += (_, _) => BeginInvoke(OpenAlarmSettings);   // 타이머 버튼 우클릭과 같은 동작(키보드/스크린리더용)
+        menu.Items.Add(alarmItem);
 
         var exportItem = new ToolStripMenuItem("설정 내보내기…") { AutoSize = false, Size = new Size(itemWidth, itemHeight) };
         exportItem.Click += (_, _) => BeginInvoke(ExportSettings);
@@ -857,13 +879,14 @@ public partial class Form1 : Form
         });
         if (path is null) return;
 
-        // 현재 창 상태/주소까지 반영해서 내보낸다
+        // 현재 창 상태를 반영해서 내보낸다. 주소의 쿼리/프래그먼트에는 토큰 등이 들어 있을 수 있어 공유 파일에는 남기지 않는다.
         _config.Opacity = Opacity;
         _config.TopMost = TopMost;
-        if (webView.CoreWebView2 is not null && JHP.Api.Site.TryNormalizeUrl(webView.CoreWebView2.Source, out string src))
-            _config.LatestUrl = src;
-
-        bool ok = _config.ExportTo(path);
+        string keptUrl = _config.LatestUrl;
+        _config.LatestUrl = Uri.TryCreate(keptUrl, UriKind.Absolute, out var u) ? u.GetLeftPart(UriPartial.Path) : "";
+        bool ok;
+        try { ok = _config.ExportTo(path); }
+        finally { _config.LatestUrl = keptUrl; }
         ShowMessage(ok ? "설정을 내보냈습니다." : "설정을 내보내지 못했습니다. 저장 위치를 확인해주세요.",
             MessageBoxButtons.OK, ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
     }

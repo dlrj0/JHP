@@ -41,6 +41,7 @@ public class SiteForm : Form
         _tbName = new TextBox
         {
             Left = 78, Top = 13, Width = 252,
+            MaxLength = 40,
             BackColor = Color.FromArgb(50, 50, 50),
             ForeColor = Color.White,
             BorderStyle = BorderStyle.FixedSingle

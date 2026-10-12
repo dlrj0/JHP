@@ -50,23 +50,52 @@ public class Config
     ];
     public string LatestUrl { get; set; } = "";
 
+    // 읽기 실패(잠김 등) 때문에 기본값으로 시작한 경우 true — 이때 Save()가 정상 파일을 덮어쓰지 않게 한다
+    private static bool _loadFailed;
+
+    private static string ReadAllTextWithRetry(string path)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            try { return File.ReadAllText(path); }
+            catch (IOException) when (attempt < 4) { Thread.Sleep(150); }
+        }
+    }
+
+    // 손상된 설정의 사본을 남긴다. 이미 사본이 있으면 덮어쓰지 않고 시각이 붙은 이름으로 따로 보관한다.
+    private static void PreserveCorrupt()
+    {
+        try
+        {
+            string target = ConfigPath + ".corrupt";
+            if (File.Exists(target)) target = ConfigPath + ".corrupt-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
+            File.Copy(ConfigPath, target, overwrite: true);
+        }
+        catch { }
+    }
+
     private static Config Load()
     {
         try
         {
             if (File.Exists(ConfigPath))
             {
-                string json = File.ReadAllText(ConfigPath);
+                string json = ReadAllTextWithRetry(ConfigPath);
                 var loaded = JsonSerializer.Deserialize<Config>(json, JsonOptions);
                 if (loaded is not null) return loaded.Normalize();
                 // 내용이 null 등 쓸 수 없는 값이면 손상된 것으로 취급
-                try { File.Copy(ConfigPath, ConfigPath + ".corrupt", overwrite: true); } catch { }
+                PreserveCorrupt();
             }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 백신/동기화 등이 파일을 잠근 경우: 파일은 멀쩡하므로 기본값으로 시작하되 이번 실행에서는 덮어쓰지 않는다.
+            _loadFailed = true;
         }
         catch
         {
             // 설정 파일이 손상된 경우: 다음 저장에서 덮어써 사라지지 않도록 사본을 남기고 기본값으로 시작한다.
-            try { File.Copy(ConfigPath, ConfigPath + ".corrupt", overwrite: true); } catch { }
+            PreserveCorrupt();
         }
 
         // 설정 파일이 없거나(첫 실행) 읽을 수 없을 때 원본 재획플레이어의 기본 사이트 목록을 채워 준다.
@@ -122,6 +151,7 @@ public class Config
 
     public void Save()
     {
+        if (_loadFailed) return;
         try
         {
             // 임시 파일에 쓴 뒤 교체해, 저장 도중 종료되어도 설정 파일이 반쯤 써진 상태로 남지 않게 한다.

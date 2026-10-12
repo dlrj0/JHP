@@ -91,6 +91,8 @@ public class Synth
                 return;
             }
             _synthesizer.SpeakAsyncCancelAll();
+            // 실행 중 기본 출력 장치가 바뀌었을 수 있으므로(블루투스 등) 매번 현재 기본 장치로 다시 연결한다
+            try { _synthesizer.SetOutputToDefaultAudioDevice(); } catch { }
             _synthesizer.Volume = Math.Clamp(volume, 0, 100);
             _synthesizer.Rate = Math.Clamp(rate, -10, 10);
             _synthesizer.SpeakAsync(text);
