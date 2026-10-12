@@ -488,6 +488,17 @@ try {
     Test-NoOverlap 'wide'
     Save-Window $main '08-wide' | Out-Null
 
+    # ---------- 7b. 같은 폴더에서 두 번째 실행 ----------
+    # 두 번째 인스턴스는 창을 띄우지 않고 곧 종료해야 하며, 기존 인스턴스는 계속 살아 있어야 한다.
+    $env:JHP_OFFSCREEN = '1'
+    $dup = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
+    Remove-Item Env:\JHP_OFFSCREEN -ErrorAction SilentlyContinue
+    $dupExited = $dup.WaitForExit(8000)
+    if (-not $dupExited) { try { $dup.Kill() } catch { } }
+    Check 'single: 같은 폴더의 두 번째 실행은 곧 종료됨' $dupExited
+    $proc.Refresh()
+    Check 'single: 기존 인스턴스는 계속 실행 중' (-not $proc.HasExited)
+
     # ---------- 8. 정상 종료 시 설정 저장 ----------
     # 앞의 슬라이더 검사에서 볼륨을 100으로 만들었다. WM_CLOSE(정상 종료)로 닫은 뒤 config.json에 반영됐는지 본다.
     [Win]::PostMessage($main, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
