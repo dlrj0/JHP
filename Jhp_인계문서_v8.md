@@ -317,3 +317,6 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 
 - 예약 작업 `JHP-Claude-Resume`을 오늘 15:29부터 1시간 간격(최대 19:00 무렵까지)으로 다시 설정함. 프롬프트의 19:00 종료 규칙은 그대로.
 - [다크 입력 칸] 알람 설정창의 ComboBox/TextBox/NumericUpDown 배경·글자색을 다크로 (`AlarmForm.InputBack`, `JHP/AlarmForm.cs`). 되돌리기: `git revert` 해당 커밋 (이전: 흰 입력 칸)
+- [시작 사이트 삭제 정리] ▼ 메뉴에서 시작 사이트를 ✕로 지우면 `DefaultSite`를 비움 (`Form1.cs` DeleteRequested). 되돌리기: `git revert` 해당 커밋
+- [테스트] `tools/ui-test.ps1`에 같은 폴더 두 번째 실행 검사(7b) 추가 → 전체 45/45
+- Form1.cs 전체 코드 리뷰 완료(2026-10-12): 위 항목 외 결함 없음

@@ -652,6 +652,9 @@ public partial class Form1 : Form
             item.DeleteRequested += (_, _) =>
             {
                 _config.Sites.Remove(site);
+                // 시작 사이트를 지웠으면(같은 이름이 남아 있지 않으면) 지정을 해제해 이름만 남지 않게 한다
+                if (site.Name == _config.DefaultSite && !_config.Sites.Any(s => s.Name == site.Name))
+                    _config.DefaultSite = "";
                 _config.Save();
                 menu.Items.Remove(item);
             };
