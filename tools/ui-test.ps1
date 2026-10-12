@@ -601,6 +601,39 @@ try {
     Check 'robust: 손상된 config.json으로도 시작되고 종료되지 않음' $alive
     Check 'robust: 손상된 설정 사본(config.json.corrupt) 보존' (Test-Path (Join-Path $app 'config.json.corrupt'))
     if (-not $proc2.HasExited) { $proc2.Kill() }
+
+    # ---------- 10. 잠긴/읽기 전용 설정 파일: 시작은 되고, 기존 파일을 덮어쓰지 않으며, 종료도 정상 ----------
+    function Start-AndClose([scriptblock]$beforeClose) {
+        if (-not $KeepOnScreen) { $env:JHP_OFFSCREEN = '1' }
+        $pp = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
+        Remove-Item Env:\JHP_OFFSCREEN -ErrorAction SilentlyContinue
+        $up = $false
+        for ($i = 0; $i -lt 40; $i++) {
+            Start-Sleep -Milliseconds 250; $pp.Refresh()
+            if ($pp.HasExited) { break }
+            if ($pp.MainWindowHandle -ne [IntPtr]::Zero -and $i -ge 12) { $up = $true; break }
+        }
+        if ($beforeClose) { & $beforeClose }
+        $closed = $false
+        if (-not $pp.HasExited) {
+            [Win]::PostMessage($pp.MainWindowHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+            $closed = $pp.WaitForExit(8000)
+            if (-not $closed) { $pp.Kill() }
+        }
+        return @{ Up = $up; Closed = $closed }
+    }
+    $valid = '{ "volume": 33, "opacity": 0.9, "sites": [ { "name": "테스트", "url": "https://example.com" } ], "alarmEnabled": [true,false,false,false,false,false,false,false] }'
+    Set-Content -LiteralPath $cfgPath -Value $valid -Encoding UTF8
+    $before = (Get-FileHash -LiteralPath $cfgPath).Hash
+    $fs = [System.IO.File]::Open($cfgPath, 'Open', 'Read', 'None')
+    try { $r = Start-AndClose $null } finally { $fs.Dispose() }
+    Check 'robust: 잠긴 config.json으로도 시작되고 정상 종료됨' ($r.Up -and $r.Closed)
+    Check 'robust: 잠긴 config.json은 종료 후에도 내용이 그대로임' ((Get-FileHash -LiteralPath $cfgPath).Hash -eq $before)
+
+    Set-ItemProperty -LiteralPath $cfgPath -Name IsReadOnly -Value $true
+    try { $r = Start-AndClose $null } finally { Set-ItemProperty -LiteralPath $cfgPath -Name IsReadOnly -Value $false }
+    Check 'robust: 읽기 전용 config.json으로도 시작되고 정상 종료됨' ($r.Up -and $r.Closed)
+    Check 'robust: 읽기 전용 config.json은 종료 후에도 내용이 그대로임' ((Get-FileHash -LiteralPath $cfgPath).Hash -eq $before)
 }
 finally {
     if (-not $proc.HasExited) { $proc.Kill() }

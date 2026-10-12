@@ -7,7 +7,41 @@ public class Config
 {
     private static Config? _instance;
     private static readonly object _lock = new();
-    private static readonly string ConfigPath = Path.Combine(AppContext.BaseDirectory, "config.json");
+    private static readonly string ConfigPath = Path.Combine(DataDirectory, "config.json");
+
+    // 설정/캐시를 두는 폴더. 기본은 exe 폴더이며, 쓸 수 없는 위치(Program Files 등)면 %LOCALAPPDATA%\JHP로 대체한다.
+    private static string? _dataDirectory;
+    public static string DataDirectory => _dataDirectory ??= ResolveDataDirectory();
+
+    private static string ResolveDataDirectory()
+    {
+        string exeDir = AppContext.BaseDirectory;
+        if (CanWrite(exeDir)) return exeDir;
+        try
+        {
+            string fallback = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JHP");
+            Directory.CreateDirectory(fallback);
+            if (CanWrite(fallback)) return fallback;
+        }
+        catch { }
+        return exeDir;
+    }
+
+    private static bool CanWrite(string dir)
+    {
+        try
+        {
+            string probe = Path.Combine(dir, ".jhp-write-" + Environment.ProcessId + ".tmp");
+            File.WriteAllText(probe, "");
+            File.Delete(probe);
+            return true;
+        }
+        catch { return false; }
+    }
+
+    // 저장에 처음 실패했을 때 한 번만 발생한다 (UI 스레드가 아닐 수 있음). 인수는 사용자에게 보여 줄 설명.
+    public static event Action<string>? SaveFailed;
+    private static bool _saveFailureReported;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -151,17 +185,34 @@ public class Config
         return this;
     }
 
-    public void Save()
+    // 저장에 성공하면 true. 실패하면 false를 돌려주고, 첫 실패 때만 SaveFailed를 발생시킨다.
+    public bool Save()
     {
-        if (_loadFailed) return;
+        if (_loadFailed)
+        {
+            ReportSaveFailure("설정 파일을 읽지 못해(다른 프로그램이 사용 중일 수 있음) 이번 실행의 변경은 저장되지 않습니다.");
+            return false;
+        }
         try
         {
             // 임시 파일에 쓴 뒤 교체해, 저장 도중 종료되어도 설정 파일이 반쯤 써진 상태로 남지 않게 한다.
             string tmp = ConfigPath + ".tmp";
             File.WriteAllText(tmp, JsonSerializer.Serialize(this, JsonOptions));
             File.Move(tmp, ConfigPath, overwrite: true);
+            return true;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            ReportSaveFailure($"설정을 저장하지 못했습니다: {ex.Message} (위치: {ConfigPath})");
+            return false;
+        }
+    }
+
+    private static void ReportSaveFailure(string message)
+    {
+        if (_saveFailureReported) return;
+        _saveFailureReported = true;
+        try { SaveFailed?.Invoke(message); } catch { }
     }
 
     // 설정을 다른 위치의 파일로 내보낸다. 실패하면 false.

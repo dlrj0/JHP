@@ -111,8 +111,19 @@ public partial class Form1 : Form
 
         // 타이머는 자동 시작 안 함 — 사용자가 timerButton 클릭 시 시작 (ToggleTimer에서만 timer.Start())
 
+        Config.SaveFailed += OnConfigSaveFailed;
         await InitWV();
         CheckUpdateAsync();
+    }
+
+    // 설정 저장 실패는 첫 번째 한 번만 알린다. 모달 대화상자 대신 타이틀바 아래 툴팁으로 잠깐 보여 준다(사냥 중 방해 최소화).
+    private void OnConfigSaveFailed(string message)
+    {
+        if (IsDisposed || !IsHandleCreated) return;
+        BeginInvoke(() =>
+        {
+            try { toolTip.Show(message, this, 12, 44, 10000); } catch { }
+        });
     }
 
     // 창의 타이틀바 쪽(위 40px)이 어느 화면의 작업 영역과 충분히(가로 100px 이상) 겹치는지 확인한다.
@@ -363,7 +374,7 @@ public partial class Form1 : Form
     {
         try
         {
-            string cacheDir = Path.Combine(AppContext.BaseDirectory, "cache");
+            string cacheDir = Path.Combine(Config.DataDirectory, "cache");
             var env = await CoreWebView2Environment.CreateAsync(userDataFolder: cacheDir);
             await webView.EnsureCoreWebView2Async(env);
 
@@ -390,7 +401,8 @@ public partial class Form1 : Form
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"WebView2 초기화 실패: {ex.Message}\nWebView2 런타임이 설치되어 있는지 확인해주세요.",
+            MessageBox.Show($"WebView2 초기화 실패: {ex.GetType().Name}: {ex.Message}\n\n" +
+                $"WebView2 런타임이 설치되어 있는지, 캐시 폴더에 쓸 수 있는지 확인해주세요.\n캐시 폴더: {Path.Combine(Config.DataDirectory, "cache")}",
                 "오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
