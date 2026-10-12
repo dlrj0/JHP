@@ -342,3 +342,17 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 - [견고성 점검 반영] 서브에이전트 버그 점검 결과 반영: Config 잠김 시 덮어쓰기 방지(`_loadFailed`)·`.corrupt` 타임스탬프 보관, 내보내기 URL 쿼리 제거, TTS 출력 장치 재연결, 업데이트 URL 검증, 렌더러 복구 횟수 제한, 사이트 이름 `MaxLength=40`, ▼ '알람 설정…', 접근성 이름, 알람창 위치 클램프. 되돌리기: `git revert` 해당 커밋
 - 보류(설계 판단 필요): 절전 복귀 후 타이머 정지/보정 방식(현재 120초 초과 시 재동기화), PerMonitorV2 DPI 모드 전환(전 화면 재검증 필요), 커스텀 알람 최소 초, 알람 PlaybackFinished 세대 번호, 알람 발화 단위 테스트
 - [잔여 점검 반영] `Synth._generation`(재생 세대 번호), `DarkTitleBar`(DWM 다크 타이틀바, SiteForm), 메뉴 구분선/`IsOnScreen` DPI 환산. 되돌리기: `git revert` 해당 커밋 (새 파일 `JHP/DarkTitleBar.cs`)
+
+### 다음 리셋 작업 큐 (2026-10-12 작성, 예약 작업 `JHP-Claude-Resume`이 이 순서로 진행)
+사용자 입력/육안 확인 없이 가능한 것만. 끝낸 항목은 `[x]`로 바꾸고 커밋 해시를 적습니다. 상세 지시는 `C:\Users\wjgus\.claude\jhp-resume-prompt.txt`.
+
+- [ ] Q1 릴리스 준비: `<Version>` 단일 출처 + `CurrentVersion`을 어셈블리 버전에서 읽기, `alarm/` 폴더 출력, 게시 프로필(self-contained win-x64). Release 생성은 하지 않음
+- [ ] Q2 UpdateChecker: Octokit → HttpClient(타임아웃 5초), 프리릴리스/비정상 태그 비교 보강, "이 버전은 다시 묻지 않음"(`SkippedVersion`)
+- [ ] Q3 설정 저장 실패 대응: `Save()` bool 반환 + 첫 실패 알림, 쓰기 불가 시 `%LOCALAPPDATA%\JHP\` 대체, WebView2 초기화 실패 메시지에 원인 포함, 잠긴/읽기 전용 설정 테스트
+- [ ] Q4 UI 테스트 갭: 알람 발화·남은 시간 라벨 카운트다운/재충전, 항목 껐다 켜기 리셋, 사이트 관리 메뉴(-IncludeMenu)
+- [ ] Q5 순수 로직 단위 테스트 프로젝트(`JHP.Tests`): Config/Site/SiteListOps/알람 틱 계산 (패키지 복원 안 되면 건너뜀)
+- [ ] Q6 다크 대화상자(`DarkMessageBox`)로 MessageBox 대체 (`ShowMessage`, SiteForm 오류, Prompt)
+- [ ] Q7 변경 전체 읽기 전용 서브에이전트 리뷰 → 실제 버그만 수정, 11장 갱신
+
+사용자 확인/입력이 필요해 큐에서 제외한 것: OTT 다음화 스킵 셀렉터(저녁에 사용자가 요소 HTML 제공 예정), 알람 소리/TTS 청취, 125%/150% 배율·호버·더블클릭 최대화·새 창 동작 육안 확인, Release 생성·`main` 병합, 기본 알람 mp3 동봉, PerMonitorV2, 절전 복귀 정책, 알람 미리 알림 등 신규 기능.
+
