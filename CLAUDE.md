@@ -16,6 +16,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\ui-test.ps1 -OutDir <�
 ```
 - UI 테스트는 별도 폴더의 인스턴스를 띄우고 창 메시지/UI Automation으로 조작합니다. 캡처는 PrintWindow.
 - 테스트 창은 기본적으로 환경 변수 `JHP_OFFSCREEN=1`로 화면 밖(-20000,0)에 뜹니다(편의 설정). ▼ 메뉴 팝업은 화면 가장자리에 잠깐 보이므로 기본은 건너뛰고 `-IncludeMenu`일 때만 검사합니다. 작업 중 창이 잠깐 뜨는 것은 괜찮지만, **작업/확인이 끝나면 반드시 최소화하거나 화면에서 치웁니다**(다른 사람이 PC 화면을 볼 수 있음).
+- 단위 테스트: `dotnet test JHP.Tests/JHP.Tests.csproj` (순수 로직: Config/Site/UpdateChecker)
 - 사용자가 쓰는 JHP가 실행 중이면 `JHP/bin`의 DLL이 잠겨 빌드가 실패합니다. 이때는 `-p:OutDir=<다른 폴더>\`로 빌드하세요.
 
 ## 반드시 지킬 것
