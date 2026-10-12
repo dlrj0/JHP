@@ -278,7 +278,7 @@ try {
         # $steps: 입력할 문자 목록(ASCII). 마지막 두 글자까지 입력한 뒤 값을 확인한다.
         $tp = Get-TitleParts
         $lbl = if ($labelPattern -like '볼륨*') { $tp.VolLabel } else { $tp.OpaLabel }
-        Send-Mouse $lbl 'ldown' 0.5 0.5; Send-Mouse $lbl 'lup' 0.5 0.5
+        Send-Mouse $lbl 'ldown' 0.92 0.5; Send-Mouse $lbl 'lup' 0.92 0.5   # 숫자 부분(오른쪽 끝)을 누른다. 이름 부분은 100 전환
         $edit = $null
         for ($try = 0; $try -lt 8 -and $null -eq $edit; $try++) {   # 입력 칸이 뜰 때까지 잠깐 기다림(타이밍 편차)
             if ($try -gt 0) { Start-Sleep -Milliseconds 200 }
@@ -311,8 +311,31 @@ try {
     }
     Run-Safe 'inline-opacity' {
         Test-InlineEdit '투명도*' '투명도 ' '%' '100' @(53, 48)   # '5', '0'
-        # 5는 최솟값(30) 미만이라 입력 중간 상태로 두고, 50이 되는 순간 반영된다 (Form1.ApplyInlineEditLive 주석)
-        Check 'inline[투명도 ]: 범위 밖 중간 입력(5)은 반영하지 않고 50에서 반영' ($script:inlineSeq[1] -eq '투명도 50%' -and $script:inlineSeq[0] -ne '투명도 5%') ("seq=" + ($script:inlineSeq -join ' | '))
+        # 5는 최솟값(30) 미만이므로 입력 즉시 30으로 보정되어 반영되고, 50이 되면 50이 된다 (Form1.ApplyInlineEditLive 주석)
+        Check 'inline[투명도 ]: 입력 즉시 반영 (5 → 투명도 30%, 50 → 투명도 50%)' ($script:inlineSeq[0] -eq '투명도 30%' -and $script:inlineSeq[1] -eq '투명도 50%') ("seq=" + ($script:inlineSeq -join ' | '))
+    }
+    # 이름 부분("볼륨"/"투명도") 클릭: 100으로, 다시 클릭하면 이전 값으로 되돌린다
+    Run-Safe 'label-toggle' {
+      try {
+        $tp = Get-TitleParts
+        foreach ($c in @(@('볼륨*', $tp.VolLabel, $tp.VolSlider, '볼륨 ', ''), @('투명도*', $tp.OpaLabel, $tp.OpaSlider, '투명도 ', '%'))) {
+            $pat, $lblEl, $sl, $pre, $suf = $c
+            Send-Mouse $sl 'ldown' 0.5 0.5; Send-Mouse $sl 'lup' 0.5 0.5   # 중간 값으로 만든 뒤
+            Start-Sleep -Milliseconds 150
+            $mid = Get-LabelText $pat
+            Send-Mouse $lblEl 'ldown' 0.08 0.5; Send-Mouse $lblEl 'lup' 0.08 0.5
+            Start-Sleep -Milliseconds 200
+            $t1 = Get-LabelText $pat
+            Check "label-toggle[$pre]: 이름 클릭 → 100" ($t1 -eq "${pre}100$suf") "label='$t1' (before='$mid')"
+            Send-Mouse $lblEl 'ldown' 0.08 0.5; Send-Mouse $lblEl 'lup' 0.08 0.5
+            Start-Sleep -Milliseconds 200
+            $t2 = Get-LabelText $pat
+            Check "label-toggle[$pre]: 다시 클릭 → 이전 값($mid)" ($t2 -eq $mid) "label='$t2'"
+        }
+      }
+      finally {
+        try { $tp = Get-TitleParts; foreach ($sl in $tp.VolSlider, $tp.OpaSlider) { Send-Mouse $sl 'ldown' 1.0 0.5; Send-Mouse $sl 'lup' 1.0 0.5 } } catch { }
+      }
     }
 
     # ---------- 4. 창 크기: 좁게 / 최대화 ----------

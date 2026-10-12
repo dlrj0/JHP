@@ -216,8 +216,8 @@ public partial class Form1 : Form
         toolTip.SetToolTip(btnClose, "닫기");
         toolTip.SetToolTip(sliderVolume, "볼륨");
         toolTip.SetToolTip(sliderOpacity, "투명도");
-        toolTip.SetToolTip(lblVolumeValue, "클릭하여 숫자로 입력");
-        toolTip.SetToolTip(lblOpacityValue, "클릭하여 숫자로 입력");
+        toolTip.SetToolTip(lblVolumeValue, "숫자: 클릭하여 직접 입력 / 이름: 클릭하면 100, 다시 클릭하면 이전 값");
+        toolTip.SetToolTip(lblOpacityValue, "숫자: 클릭하여 직접 입력 / 이름: 클릭하면 100, 다시 클릭하면 이전 값");
 
         // 볼륨
         sliderVolume.Value = Math.Clamp(_config.Volume, sliderVolume.Minimum, sliderVolume.Maximum);
@@ -229,7 +229,8 @@ public partial class Form1 : Form
             Synth.Instance.SetVolume(sliderVolume.Value);
             ScheduleSave();
         };
-        lblVolumeValue.Click += (_, _) => BeginInlineEdit("volume");
+        lblVolumeValue.MouseClick += (_, e) => ValueLabel_MouseClick("volume", lblVolumeValue, e);
+        lblVolumeValue.MouseMove += (_, e) => lblVolumeValue.Cursor = e.X >= NumberPartStart(lblVolumeValue) ? Cursors.IBeam : Cursors.Hand;
         sliderVolume.DragCompleted += (_, _) => webView.Focus();   // 마우스로 조절한 뒤 화살표 키가 영상 탐색으로 가게
 
         // 투명도 (30~100%)
@@ -243,7 +244,8 @@ public partial class Form1 : Form
             _config.Opacity = Opacity;
             ScheduleSave();
         };
-        lblOpacityValue.Click += (_, _) => BeginInlineEdit("opacity");
+        lblOpacityValue.MouseClick += (_, e) => ValueLabel_MouseClick("opacity", lblOpacityValue, e);
+        lblOpacityValue.MouseMove += (_, e) => lblOpacityValue.Cursor = e.X >= NumberPartStart(lblOpacityValue) ? Cursors.IBeam : Cursors.Hand;
         sliderOpacity.DragCompleted += (_, _) => webView.Focus();
 
         // 인라인 편집 TextBox
@@ -311,32 +313,74 @@ public partial class Form1 : Form
         UpdateNextAlarmLabel();
     }
 
+    // ===== 볼륨/투명도 라벨 클릭 =====
+    // 라벨은 "볼륨 100"처럼 이름 + 숫자다. 숫자 부분을 누르면 직접 입력, 이름 부분을 누르면 100 ↔ 이전 값으로 전환한다.
+    private int? _volumeRestore;    // 이름을 눌러 100으로 올리기 전의 값
+    private int? _opacityRestore;
+
+    // 라벨 안에서 숫자가 시작하는 x 좌표(이름 + 공백의 폭)
+    private static int NumberPartStart(Label lbl)
+    {
+        int sp = lbl.Text.IndexOf(' ');
+        if (sp < 0) return 0;
+        return TextRenderer.MeasureText(lbl.Text[..(sp + 1)], lbl.Font, Size.Empty, TextFormatFlags.NoPadding).Width;
+    }
+
+    private void ValueLabel_MouseClick(string target, Label lbl, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left) return;
+        if (e.X >= NumberPartStart(lbl)) { BeginInlineEdit(target); return; }
+
+        if (target == "volume") ToggleFull(sliderVolume, ref _volumeRestore);
+        else ToggleFull(sliderOpacity, ref _opacityRestore);
+        webView.Focus();   // 슬라이더 조작과 같이 화살표 키가 영상 탐색으로 가게
+    }
+
+    // 최댓값(100)이 아니면 현재 값을 기억하고 100으로, 기억해 둔 값이 있는 상태에서 100이면 원래 값으로 되돌린다.
+    private static void ToggleFull(NSlider slider, ref int? restore)
+    {
+        if (slider.Value != slider.Maximum)
+        {
+            restore = slider.Value;
+            slider.Value = slider.Maximum;
+        }
+        else if (restore is int previous)
+        {
+            slider.Value = previous;
+            restore = null;
+        }
+    }
+
     // ===== 인라인 숫자 편집 =====
     private void BeginInlineEdit(string target)
     {
         _inlineEditTarget = target;
         int value = target == "volume" ? sliderVolume.Value : sliderOpacity.Value;
         Label lbl = target == "volume" ? lblVolumeValue : lblOpacityValue;
+        float s = DeviceDpi / 96f;
+        int Px(int v) => (int)Math.Round(v * s);
 
         _inlineEditOriginal = value;
         tbInlineEdit.Text = value.ToString();
-        tbInlineEdit.Location = new Point(lbl.Left, (pnlTitleBar.Height - tbInlineEdit.Height) / 2);
-        tbInlineEdit.Width = Math.Max(tbInlineEdit.Width, lbl.Width);   // 라벨 끝이 비쳐 보이지 않게(라벨은 그대로 두어 값 표시/접근성 유지)
+        // 이름("볼륨", "투명도")은 그대로 보이게 두고 숫자 자리에만 입력 칸을 겹친다. 라벨의 숫자(와 %)가 비쳐 보이지 않을 폭으로 잡는다.
+        string widest = target == "volume" ? "100" : "100%";
+        int numberLeft = Math.Max(0, NumberPartStart(lbl) - Px(3));
+        tbInlineEdit.Width = TextRenderer.MeasureText(widest, tbInlineEdit.Font, Size.Empty, TextFormatFlags.NoPadding).Width + Px(14);
+        tbInlineEdit.Location = new Point(lbl.Left + numberLeft, (pnlTitleBar.Height - tbInlineEdit.Height) / 2);
         tbInlineEdit.Visible = true;
         tbInlineEdit.Focus();
         tbInlineEdit.SelectAll();
     }
 
-    // 입력 도중에도 유효 범위의 값이면 즉시 반영한다(범위를 벗어나거나 입력 중간 상태는 확정 시 보정).
-    // 예: 투명도 최소 30이므로 "5"를 치는 순간 30%로 튀지 않고, "50"까지 입력해야 반영된다.
+    // 입력하는 즉시 슬라이더에 반영한다. 범위를 벗어난 값은 가장 가까운 한계로 보정한다
+    // (예: 투명도 최소 30이므로 "5"를 치면 30%, 이어서 "50"이 되면 50%). 빈 칸이면 그대로 둔다.
     private void ApplyInlineEditLive()
     {
         if (_inlineEditTarget is null || !tbInlineEdit.Visible) return;
         if (!int.TryParse(tbInlineEdit.Text, out int val)) return;
 
         NSlider slider = _inlineEditTarget == "volume" ? sliderVolume : sliderOpacity;
-        if (val < slider.Minimum || val > slider.Maximum) return;
-        slider.Value = val;
+        slider.Value = Math.Clamp(val, slider.Minimum, slider.Maximum);
     }
 
     private void CommitInlineEdit()

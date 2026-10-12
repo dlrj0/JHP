@@ -35,7 +35,7 @@ namespace JHP
 
         private WebView2 webView;
 
-        private const int ResizeEdge = 5;
+        private const int ResizeEdge = 2;   // 가장자리 크기(96dpi 기준). 보이는 테두리를 최소화하면서 끌어서 크기를 바꿀 수 있는 최소 폭
         private Panel pnlResizeLeft;
         private Panel pnlResizeRight;
         private Panel pnlResizeBottom;
@@ -120,8 +120,8 @@ namespace JHP
             // 인라인 직접입력 TextBox (기본 숨김, 볼륨/투명도 숫자 클릭 시 표시)
             tbInlineEdit.Visible = false;
             tbInlineEdit.Size = new Size(60, 20);
-            tbInlineEdit.BackColor = Color.FromArgb(50, 50, 50);
-            tbInlineEdit.ForeColor = Color.White;
+            tbInlineEdit.BackColor = Color.FromArgb(245, 245, 245);   // 일반 텍스트 상자처럼 밝게 보이게
+            tbInlineEdit.ForeColor = Color.Black;
             tbInlineEdit.BorderStyle = BorderStyle.FixedSingle;
 
             // 우측 버튼 위치는 LayoutTitleBar()에서 계산 (Anchor는 패널 기본 폭 200 기준으로 계산되어 창 밖으로 밀려남)
