@@ -123,6 +123,15 @@ public partial class Form1 : Form
         pnlTitleBar.MouseDown += TitleBar_MouseDown;
         lblTitle.MouseDown += TitleBar_MouseDown;
         pnlTitleBar.MouseMove += TitleBar_MouseMove;
+        // 타이틀바 빈 영역 더블클릭: 최대화 / 이전 크기 (가장자리 리사이즈 영역은 제외)
+        pnlTitleBar.MouseDoubleClick += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Left && TitleBarEdgeHit(e.Location) == HTCLIENT) btnMaximize.PerformClick();
+        };
+        lblTitle.MouseDoubleClick += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Left) btnMaximize.PerformClick();
+        };
 
         // 가장자리 리사이즈 핸들 (webView가 가장자리를 덮고 있어 WM_NCHITTEST 방식이 동작하지 않음)
         pnlResizeLeft.MouseDown += (_, e) => BeginResize(e, HTLEFT);

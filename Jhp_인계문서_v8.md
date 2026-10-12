@@ -326,3 +326,5 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 - [메뉴 검사 실행] 규칙 정정 후 -IncludeMenu로 전체 실행: **58/58 통과**(▼ 메뉴 항목 전부 + '알람 울릴 때 영상 음소거' 항목 존재, 사이트 추가창 열림). 사이트 추가창 내부 검사는 UIA 시간 초과로 SKIP(기존과 동일). 실행 후 남은 JHP 프로세스 없음.
 - [설정 내보내기/가져오기] ▼ 메뉴 항목 2개 추가 (`Form1.cs` ExportSettings/ImportSettings, `Config.ExportTo/ReadFrom`). 되돌리기: `git revert` 해당 커밋. 파일 대화상자는 실제 입력이 필요해 자동 검증은 메뉴 항목 존재까지만 함 → 사용자 육안 확인 권장
 - [리뷰 반영 2] 서브에이전트 리뷰(checkpoint-4 이후 diff) 5건 반영: 가져오기 시 알람창 닫기, `DefaultSite` 보정(Normalize), 시작 직후 두 번째 실행 신호 보존(`pendingShow`), 최소화 복원 시 직전 상태 사용(`BringToFrontFromAnotherInstance`), 메시지 상자를 `WithDialogState`로 감쌈. 되돌리기: `git revert` 해당 커밋
+- [AlarmForm 직접 배치] `Anchor=Right/Bottom` 제거 → `LayoutRightAligned()`(Resize/Shown에서 호출). 되돌리기: `git revert` 해당 커밋 (`JHP/AlarmForm.cs`)
+- [타이틀바 더블클릭 최대화] `pnlTitleBar`/`lblTitle` `MouseDoubleClick` → `btnMaximize.PerformClick()` (`JHP/Form1.cs`). 자동 검증 불가 → 사용자 육안 확인 필요. 되돌리기: `git revert` 해당 커밋

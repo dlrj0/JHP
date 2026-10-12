@@ -28,6 +28,10 @@ public class AlarmForm : Form
     private TrackBar _tbRate = null!;
     private Label _lblVolume = null!;
     private Label _lblRate = null!;
+    private Button _btnPlay = null!;
+    private Button _btnSample = null!;
+    private Button _btnOk = null!;
+    private Button _btnCancel = null!;
 
     // 확인 버튼으로 닫혔는지 (비모달 폼이라 DialogResult 대신 사용)
     public bool Accepted { get; private set; }
@@ -110,8 +114,7 @@ public class AlarmForm : Form
             DropDownStyle = ComboBoxStyle.DropDown,
             FlatStyle = FlatStyle.Flat,
             BackColor = InputBack,
-            ForeColor = Color.White,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+            ForeColor = Color.White
         };
         try
         {
@@ -129,9 +132,9 @@ public class AlarmForm : Form
             Left = ClientSize.Width - 12 - 40, Top = y - 1, Width = 40, Height = 26,
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(60, 60, 60),
-            ForeColor = Color.White,
-            Anchor = AnchorStyles.Top | AnchorStyles.Right
+            ForeColor = Color.White
         };
+        _btnPlay = btnPlay;
         btnPlay.FlatAppearance.BorderSize = 0;
         btnPlay.Click += (_, _) => Synth.Instance.Ring(_tbAlarmName.Text, _tbVolume.Value);
         Controls.Add(btnPlay);
@@ -146,9 +149,9 @@ public class AlarmForm : Form
             Left = ClientSize.Width - 12 - 110, Top = y - 2, Width = 110, Height = 26,
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(60, 60, 60),
-            ForeColor = Color.White,
-            Anchor = AnchorStyles.Top | AnchorStyles.Right
+            ForeColor = Color.White
         };
+        _btnSample = btnSample;
         btnSample.FlatAppearance.BorderSize = 0;
         btnSample.Click += (_, _) => Synth.Instance.TTS("재획비", _tbVolume.Value, _tbRate.Value);
         Controls.Add(btnSample);
@@ -158,8 +161,7 @@ public class AlarmForm : Form
         _tbVolume = new TrackBar
         {
             Left = 108, Top = y, Width = ClientSize.Width - 120,
-            Minimum = 0, Maximum = 100, TickFrequency = 10,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+            Minimum = 0, Maximum = 100, TickFrequency = 10
         };
         _tbVolume.ValueChanged += (s, e) => _lblVolume.Text = $"볼륨: {_tbVolume.Value}";
         Controls.Add(_tbVolume);
@@ -169,8 +171,7 @@ public class AlarmForm : Form
         _tbRate = new TrackBar
         {
             Left = 108, Top = y, Width = ClientSize.Width - 120,
-            Minimum = -10, Maximum = 10, TickFrequency = 2,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+            Minimum = -10, Maximum = 10, TickFrequency = 2
         };
         _tbRate.ValueChanged += (s, e) => _lblRate.Text = $"TTS 속도: {_tbRate.Value}";
         Controls.Add(_tbRate);
@@ -188,8 +189,7 @@ public class AlarmForm : Form
                 Left = 36, Top = y, Width = 190, PlaceholderText = "알람 이름",
                 BackColor = InputBack,
                 ForeColor = Color.White,
-                BorderStyle = BorderStyle.FixedSingle,
-                Anchor = AnchorStyles.Top | AnchorStyles.Left
+                BorderStyle = BorderStyle.FixedSingle
             };
             Controls.Add(_customNames[i]);
 
@@ -216,9 +216,9 @@ public class AlarmForm : Form
             Width = 80,
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(55, 90, 145),
-            ForeColor = Color.White,
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Right
+            ForeColor = Color.White
         };
+        _btnOk = btnOk;
         btnOk.FlatAppearance.BorderSize = 0;
         btnOk.Click += BtnOk_Click;
         btnOk.Click += (_, _) => Close();
@@ -233,9 +233,9 @@ public class AlarmForm : Form
 
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(60, 60, 60),
-            ForeColor = Color.White,
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Right
+            ForeColor = Color.White
         };
+        _btnCancel = btnCancel;
         btnCancel.FlatAppearance.BorderSize = 0;
         btnCancel.Click += (_, _) => Close();
         Controls.Add(btnCancel);
@@ -248,6 +248,30 @@ public class AlarmForm : Form
         AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;
         ResumeLayout(false);
+
+        // 오른쪽/아래 정렬 컨트롤은 Anchor 대신 직접 배치한다 (Anchor는 부모 기본 크기 기준이라 배율에서 어긋남)
+        Resize += (_, _) => LayoutRightAligned();
+        Shown += (_, _) => LayoutRightAligned();
+    }
+
+    // 폼 크기가 바뀌거나 배율이 적용된 뒤: 오른쪽 끝 정렬 컨트롤의 위치/폭과 하단 버튼 위치를 다시 계산한다 (좌표는 96dpi 기준 → s 배)
+    private void LayoutRightAligned()
+    {
+        if (_btnOk is null) return;
+        float s = DeviceDpi / 96f;
+        int Px(int v) => (int)Math.Round(v * s);
+        int right = ClientSize.Width - Px(12);
+
+        _btnPlay.Left = right - _btnPlay.Width;
+        _tbAlarmName.Width = Math.Max(Px(60), _btnPlay.Left - Px(6) - _tbAlarmName.Left);
+        _btnSample.Left = right - _btnSample.Width;
+        _tbVolume.Width = Math.Max(Px(60), right - _tbVolume.Left);
+        _tbRate.Width = Math.Max(Px(60), right - _tbRate.Left);
+
+        _btnCancel.Left = right - _btnCancel.Width;
+        _btnOk.Left = _btnCancel.Left - Px(8) - _btnOk.Width;
+        int top = ClientSize.Height - Px(46);
+        _btnOk.Top = _btnCancel.Top = top;
     }
 
     private Label AddLabel(string text, int left, int top, int width)
