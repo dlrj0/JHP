@@ -13,13 +13,16 @@ public static class Prompt
             FormBorderStyle = FormBorderStyle.FixedDialog,
             StartPosition = FormStartPosition.CenterParent,
             MaximizeBox = false,
-            MinimizeBox = false
+            MinimizeBox = false,
+            BackColor = Color.FromArgb(32, 32, 32),
+            ForeColor = Color.White
         };
+        form.HandleCreated += (_, _) => DarkTitleBar.Apply(form.Handle);
 
         Label lbl = new() { Left = 12, Top = 14, Width = 320, Text = label };
-        TextBox tb = new() { Left = 12, Top = 36, Width = 320, Text = defaultValue };
-        Button ok = new() { Text = "확인", Left = 172, Top = 70, Width = 80, DialogResult = DialogResult.OK };
-        Button cancel = new() { Text = "취소", Left = 260, Top = 70, Width = 80, DialogResult = DialogResult.Cancel };
+        TextBox tb = new() { Left = 12, Top = 36, Width = 320, Text = defaultValue, BackColor = Color.FromArgb(50, 50, 50), ForeColor = Color.White };
+        Button ok = new() { Text = "확인", Left = 172, Top = 70, Width = 80, DialogResult = DialogResult.OK, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(60, 60, 60), ForeColor = Color.White };
+        Button cancel = new() { Text = "취소", Left = 260, Top = 70, Width = 80, DialogResult = DialogResult.Cancel, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(60, 60, 60), ForeColor = Color.White };
 
         form.Controls.AddRange([lbl, tb, ok, cancel]);
         form.AcceptButton = ok;
@@ -32,13 +35,13 @@ public static class Prompt
     // owner를 지정하면 항상 위 상태의 메인 창 뒤에 가려지지 않는다.
     public static bool ShowDialog(string title, string message, IWin32Window? owner = null)
     {
-        return MessageBox.Show(owner, message, title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question)
+        return DarkMessageBox.Show(owner, message, title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question)
                == DialogResult.OK;
     }
 
     // 예 / 아니오 / 취소 다이얼로그
     public static DialogResult ShowYesNoCancel(string title, string message, IWin32Window? owner = null)
     {
-        return MessageBox.Show(owner, message, title, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+        return DarkMessageBox.Show(owner, message, title, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
     }
 }

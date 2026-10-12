@@ -104,7 +104,7 @@ public class SiteForm : Form
     {
         if (string.IsNullOrWhiteSpace(_tbName.Text) || string.IsNullOrWhiteSpace(_tbUrl.Text))
         {
-            MessageBox.Show(this, "이름과 URL을 모두 입력해주세요.", "입력 오류",
+            DarkMessageBox.Show(this, "이름과 URL을 모두 입력해주세요.", "입력 오류",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
             (string.IsNullOrWhiteSpace(_tbName.Text) ? _tbName : _tbUrl).Focus();
             DialogResult = DialogResult.None;
@@ -112,7 +112,7 @@ public class SiteForm : Form
         }
         if (!JHP.Api.Site.TryNormalizeUrl(_tbUrl.Text, out string url))
         {
-            MessageBox.Show(this, "올바른 웹 주소가 아닙니다. http:// 또는 https://로 시작하는 주소를 입력해주세요.", "입력 오류",
+            DarkMessageBox.Show(this, "올바른 웹 주소가 아닙니다. http:// 또는 https://로 시작하는 주소를 입력해주세요.", "입력 오류",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
             _tbUrl.Focus();
             _tbUrl.SelectAll();

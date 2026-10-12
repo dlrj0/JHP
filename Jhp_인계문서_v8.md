@@ -348,6 +348,7 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 | Q3 저장 실패 대응 | `Config.Save()` bool 반환, `Config.SaveFailed` 이벤트(첫 실패 1회, 툴팁), `Config.DataDirectory`(exe 폴더 쓰기 불가 시 `%LOCALAPPDATA%\JHP`, 캐시도 동일), 잠김/읽기 전용 테스트 4항목 | `JHP.Api/Config.cs`, `Form1.cs`, `tools/ui-test.ps1` | `git revert` "[Q3]". 쓰기 불가 환경에서 만든 설정은 `%LOCALAPPDATA%\JHP\config.json`에 있음 |
 | Q4 테스트 확장 | 타이머 카운트다운/재충전/정지 시 `--:--`, 항목 껐다 켜기 리셋 규칙, 테스트 후 알람 설정 복원(57/57). 테스트 중 알람이 한 번 울림(4초 알람) | `tools/ui-test.ps1` | 앱 코드 변경 없음. 사이트 관리 메뉴(우클릭) 합성 검사는 미추가 |
 | Q5 단위 테스트 | `JHP.Tests`(xunit): Config 보정/내보내기/`Replace` 전체 속성 복사, Site URL 정규화, SiteListOps, `UpdateChecker.IsNewer` | `JHP.Tests/*`, `JHP.slnx` | 실행: `dotnet test JHP.Tests/JHP.Tests.csproj` (JHP가 실행 중이면 `-p:OutDir=<폴더>\`). 되돌리기: 폴더 삭제 + slnx 한 줄 |
+| Q6 다크 대화상자 | `JHP.Api/DarkMessageBox.cs`(OK/OKCancel/YesNo/YesNoCancel, Enter/Esc/X 규칙은 MessageBox와 동일, 아이콘 없음), `DarkTitleBar`를 JHP→JHP.Api로 이동(공개), `Prompt`가 사용. 단위 테스트 6개 | `JHP.Api/DarkMessageBox.cs`, `DarkTitleBar.cs`, `Prompt.cs`, `Form1.cs`, `SiteForm.cs` | `git revert` "[Q6]". 실제 모양은 사용자 육안 확인 권장(삭제 확인/설정 가져오기 등) |
 
 ### 다음 리셋 작업 큐 (2026-10-12 작성, 예약 작업 `JHP-Claude-Resume`이 이 순서로 진행)
 사용자 입력/육안 확인 없이 가능한 것만. 끝낸 항목은 `[x]`로 바꾸고 커밋 해시를 적습니다. 상세 지시는 `C:\Users\wjgus\.claude\jhp-resume-prompt.txt`.
@@ -357,7 +358,7 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 - [x] Q3 ("[Q3]" 커밋) 설정 저장 실패 대응: `Save()` bool 반환 + 첫 실패 알림, 쓰기 불가 시 `%LOCALAPPDATA%\JHP\` 대체, WebView2 초기화 실패 메시지에 원인 포함, 잠긴/읽기 전용 설정 테스트
 - [x] Q4 ("[Q4]" 커밋; (c) 사이트 관리 메뉴 동작은 팝업 우클릭 합성이 불안정해 미추가 → 육안 확인) UI 테스트 갭: 알람 발화·남은 시간 라벨 카운트다운/재충전, 항목 껐다 켜기 리셋, 사이트 관리 메뉴(-IncludeMenu)
 - [x] Q5 ("[Q5]" 커밋; 알람 틱 계산은 `Form1`에서 분리하지 않아 UI 테스트(Q4)로 대체, 단위 테스트 32개 통과) 순수 로직 단위 테스트 프로젝트(`JHP.Tests`): Config/Site/SiteListOps/알람 틱 계산 (패키지 복원 안 되면 건너뜀)
-- [ ] Q6 다크 대화상자(`DarkMessageBox`)로 MessageBox 대체 (`ShowMessage`, SiteForm 오류, Prompt)
+- [x] Q6 ("[Q6]" 커밋; `Program.cs`의 전역 예외 알림만 크래시 중 안전을 위해 기본 MessageBox 유지) 다크 대화상자(`DarkMessageBox`)로 MessageBox 대체 (`ShowMessage`, SiteForm 오류, Prompt)
 - [ ] Q7 변경 전체 읽기 전용 서브에이전트 리뷰 → 실제 버그만 수정, 11장 갱신
 
 사용자 확인/입력이 필요해 큐에서 제외한 것: OTT 다음화 스킵 셀렉터(저녁에 사용자가 요소 HTML 제공 예정), 알람 소리/TTS 청취, 125%/150% 배율·호버·더블클릭 최대화·새 창 동작 육안 확인, Release 생성·`main` 병합, 기본 알람 mp3 동봉, PerMonitorV2, 절전 복귀 정책, 알람 미리 알림 등 신규 기능.

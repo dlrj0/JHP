@@ -401,7 +401,7 @@ public partial class Form1 : Form
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"WebView2 초기화 실패: {ex.GetType().Name}: {ex.Message}\n\n" +
+            DarkMessageBox.Show(null, $"WebView2 초기화 실패: {ex.GetType().Name}: {ex.Message}\n\n" +
                 $"WebView2 런타임이 설치되어 있는지, 캐시 폴더에 쓸 수 있는지 확인해주세요.\n캐시 폴더: {Path.Combine(Config.DataDirectory, "cache")}",
                 "오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
@@ -915,7 +915,7 @@ public partial class Form1 : Form
     }
 
     private DialogResult ShowMessage(string text, MessageBoxButtons buttons, MessageBoxIcon icon) =>
-        WithDialogState(() => MessageBox.Show(this, text, "JHP", buttons, icon));
+        WithDialogState(() => DarkMessageBox.Show(this, text, "JHP", buttons, icon));
 
     private void ImportSettings()
     {
@@ -1063,12 +1063,12 @@ public partial class Form1 : Form
         if (webView.CoreWebView2 is null) return;
         if (!JHP.Api.Site.TryNormalizeUrl(site.Url, out string url))
         {
-            MessageBox.Show(this, $"'{site.Name}'의 주소가 올바르지 않습니다.\n{site.Url}", "JHP",
+            DarkMessageBox.Show(this, $"'{site.Name}'의 주소가 올바르지 않습니다.\n{site.Url}", "JHP",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
         try { webView.CoreWebView2.Navigate(url); }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "JHP", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        catch (Exception ex) { DarkMessageBox.Show(this, ex.Message, "JHP", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
     }
 
     // V버튼 드롭다운 전용 사이트 항목: 일반 ToolStripMenuItem이지만 우측 끝(✕ 영역) 클릭 시
