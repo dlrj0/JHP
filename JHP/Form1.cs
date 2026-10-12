@@ -385,22 +385,28 @@ public partial class Form1 : Form
             // 렌더러 프로세스가 죽으면 빈 화면으로 남으므로 새로고침한다
             webView.CoreWebView2.ProcessFailed += (_, e) =>
             {
-                // 종료 중이 아니고, 반복 실패로 무한 새로고침되지 않도록 횟수를 제한한다
-                if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.RenderProcessExited
-                    && !IsDisposed && IsHandleCreated && _renderRecoveries++ < 5)
+                // 종료 중이 아니고, 짧은 시간에 반복 실패해도 무한 새로고침되지 않도록 횟수를 제한한다.
+                // 오래 켜 둔 상태에서 가끔 죽는 경우를 위해, 마지막 복구로부터 5분이 지나면 횟수를 다시 센다.
+                if (e.ProcessFailedKind != CoreWebView2ProcessFailedKind.RenderProcessExited
+                    || IsDisposed || !IsHandleCreated) return;
+                long now = Environment.TickCount64;
+                if (now - _lastRecoveryMs > 5 * 60_000) _renderRecoveries = 0;
+                _lastRecoveryMs = now;
+                if (_renderRecoveries++ < 5)
                     BeginInvoke(() => webView.CoreWebView2?.Reload());
             };
             webView.CoreWebView2.Navigate(ResolveStartUrl());
         }
         catch (Exception ex)
         {
-            DarkMessageBox.Show(null, $"WebView2 초기화 실패: {ex.GetType().Name}: {ex.Message}\n\n" +
+            DarkMessageBox.Show(this, $"WebView2 초기화 실패: {ex.GetType().Name}: {ex.Message}\n\n" +
                 $"WebView2 런타임이 설치되어 있는지, 캐시 폴더에 쓸 수 있는지 확인해주세요.\n캐시 폴더: {Path.Combine(Config.DataDirectory, "cache")}",
                 "오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
     private int _renderRecoveries;
+    private long _lastRecoveryMs;
 
     private string ResolveStartUrl()
     {
@@ -826,8 +832,15 @@ public partial class Form1 : Form
             });
             return;
         }
+        // 최대화된 채 다른 모니터로 옮기거나 작업 표시줄이 바뀌어도 현재 모니터의 작업 영역에 맞추도록, 최대화 크기를 묻는 시점에 갱신한다.
+        if (m.Msg == WM_GETMINMAXINFO && IsHandleCreated)
+        {
+            try { UpdateMaximizedBounds(); } catch { }
+        }
         base.WndProc(ref m);
     }
+
+    private const int WM_GETMINMAXINFO = 0x0024;
 
     // ===== 설정 내보내기/가져오기 =====
     // 파일 대화상자를 띄우는 동안 항상 위 상태면 대화상자가 가려질 수 있어 임시로 해제한다 (ShowSiteDialog와 같은 방식).
@@ -1023,7 +1036,11 @@ public partial class Form1 : Form
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-        try { webView.CoreWebView2.Navigate(url); }
+        try
+        {
+            webView.CoreWebView2.Navigate(url);
+            webView.Focus();   // ▼ 버튼에 포커스가 남아 Space/방향키가 메뉴로 가지 않게 웹 화면으로 돌려 준다
+        }
         catch (Exception ex) { DarkMessageBox.Show(this, ex.Message, "JHP", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
     }
 
