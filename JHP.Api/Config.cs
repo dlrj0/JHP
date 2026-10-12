@@ -99,6 +99,7 @@ public class Config
         Sites = (Sites ?? []).Where(s => s is not null && !string.IsNullOrWhiteSpace(s.Url)).ToList();
         foreach (var s in Sites) s.Name ??= s.Url;
         DefaultSite ??= "";
+        if (!Sites.Any(s => s.Name == DefaultSite)) DefaultSite = ""; // 목록에 없는 이름이 남지 않게
         AlarmName ??= "";
         LatestUrl ??= "";
 

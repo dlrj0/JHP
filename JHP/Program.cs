@@ -35,16 +35,18 @@ static class Program
         AppDomain.CurrentDomain.UnhandledException += (_, e) => ReportError(e.ExceptionObject as Exception);
 
         var form = new Form1();
+        bool pendingShow = false;   // 창이 만들어지기 전에 온 요청은 표시 직후 처리한다
+        form.Shown += (_, _) =>
+        {
+            if (pendingShow) { pendingShow = false; form.BringToFrontFromAnotherInstance(); }
+        };
         var registered = ThreadPool.RegisterWaitForSingleObject(showEvent, (_, _) =>
         {
             try
             {
-                if (form.IsDisposed || !form.IsHandleCreated) return;
-                form.BeginInvoke(() =>
-                {
-                    if (form.WindowState == FormWindowState.Minimized) form.WindowState = FormWindowState.Normal;
-                    form.Activate();
-                });
+                if (form.IsDisposed) return;
+                if (!form.IsHandleCreated) { pendingShow = true; return; }
+                form.BeginInvoke(form.BringToFrontFromAnotherInstance);
             }
             catch { }
         }, null, Timeout.Infinite, false);

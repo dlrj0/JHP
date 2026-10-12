@@ -678,6 +678,14 @@ public partial class Form1 : Form
         menu.Show(btnMenu, new Point(0, btnMenu.Height));
     }
 
+    // 같은 폴더에서 JHP를 다시 실행했을 때 호출된다: 최소화돼 있으면 직전 상태(일반/최대화)로 복원하고 앞으로 가져온다.
+    internal void BringToFrontFromAnotherInstance()
+    {
+        if (IsDisposed) return;
+        if (WindowState == FormWindowState.Minimized) WindowState = _lastNonMinimizedState;
+        Activate();
+    }
+
     // ===== 설정 내보내기/가져오기 =====
     // 파일 대화상자를 띄우는 동안 항상 위 상태면 대화상자가 가려질 수 있어 임시로 해제한다 (ShowSiteDialog와 같은 방식).
     private T WithDialogState<T>(Func<T> show)
@@ -715,9 +723,12 @@ public partial class Form1 : Form
             _config.LatestUrl = src;
 
         bool ok = _config.ExportTo(path);
-        MessageBox.Show(this, ok ? "설정을 내보냈습니다." : "설정을 내보내지 못했습니다. 저장 위치를 확인해주세요.",
-            "JHP", MessageBoxButtons.OK, ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+        ShowMessage(ok ? "설정을 내보냈습니다." : "설정을 내보내지 못했습니다. 저장 위치를 확인해주세요.",
+            MessageBoxButtons.OK, ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
     }
+
+    private DialogResult ShowMessage(string text, MessageBoxButtons buttons, MessageBoxIcon icon) =>
+        WithDialogState(() => MessageBox.Show(this, text, "JHP", buttons, icon));
 
     private void ImportSettings()
     {
@@ -736,11 +747,16 @@ public partial class Form1 : Form
         var imported = Config.ReadFrom(path);
         if (imported is null || imported.Sites.Count == 0)
         {
-            MessageBox.Show(this, "올바른 JHP 설정 파일이 아닙니다.", "JHP", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            ShowMessage("올바른 JHP 설정 파일이 아닙니다.", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-        if (MessageBox.Show(this, "현재 설정(사이트 목록, 알람, 볼륨 등)을 가져온 설정으로 바꿉니다. 계속할까요?",
-                "JHP", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        if (ShowMessage("현재 설정(사이트 목록, 알람, 볼륨 등)을 가져온 설정으로 바꿉니다. 계속할까요?",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+        // 알람 설정창이 열려 있으면 먼저 닫는다(확인되지 않은 채로 닫히므로 오래된 값이 다시 저장되지 않음)
+        _alarmForm?.Close();
+        _alarmEnabledSnapshot = null;
+        _customSnapshot = null;
 
         // 창 위치/크기와 현재 주소는 지금 상태를 유지하고, 나머지를 교체한다
         imported.X = _config.X; imported.Y = _config.Y;
