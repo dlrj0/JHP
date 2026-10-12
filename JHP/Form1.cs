@@ -315,6 +315,16 @@ public partial class Form1 : Form
             await webView.EnsureCoreWebView2Async(env);
 
             webView.CoreWebView2.NavigationCompleted += (_, e) => { if (e.IsSuccess) InjectJS(); };
+            // 링크 클릭으로 열리는 새 창(target=_blank)은 별도 창 대신 이 창에서 연다.
+            // 크기/위치를 지정한 팝업(window.open 기능 지정: 로그인 등 opener가 필요한 창)은 기본 동작을 유지한다.
+            webView.CoreWebView2.NewWindowRequested += (_, e) =>
+            {
+                if (e.IsUserInitiated is false) return;
+                if (e.WindowFeatures.HasSize || e.WindowFeatures.HasPosition) return;
+                if (!JHP.Api.Site.TryNormalizeUrl(e.Uri, out string target)) return;
+                e.Handled = true;
+                try { webView.CoreWebView2.Navigate(target); } catch { }
+            };
             // 렌더러 프로세스가 죽으면 빈 화면으로 남으므로 새로고침한다
             webView.CoreWebView2.ProcessFailed += (_, e) =>
             {
