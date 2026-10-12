@@ -19,7 +19,13 @@ static class Program
         string name = "JHP_" + Convert.ToHexString(
             System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(AppContext.BaseDirectory.ToLowerInvariant())))[..16];
         using var mutex = new Mutex(true, name, out bool createdNew);
-        if (!createdNew) return;
+        using var showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, name + "_show");
+        if (!createdNew)
+        {
+            // 이미 실행 중인 창에 "앞으로 나와라" 신호를 보내고 종료
+            try { showEvent.Set(); } catch { }
+            return;
+        }
 
         ApplicationConfiguration.Initialize();
 
@@ -28,7 +34,23 @@ static class Program
         Application.ThreadException += (_, e) => ReportError(e.Exception);
         AppDomain.CurrentDomain.UnhandledException += (_, e) => ReportError(e.ExceptionObject as Exception);
 
-        Application.Run(new Form1());
+        var form = new Form1();
+        var registered = ThreadPool.RegisterWaitForSingleObject(showEvent, (_, _) =>
+        {
+            try
+            {
+                if (form.IsDisposed || !form.IsHandleCreated) return;
+                form.BeginInvoke(() =>
+                {
+                    if (form.WindowState == FormWindowState.Minimized) form.WindowState = FormWindowState.Normal;
+                    form.Activate();
+                });
+            }
+            catch { }
+        }, null, Timeout.Infinite, false);
+
+        try { Application.Run(form); }
+        finally { registered.Unregister(null); }
     }
 
     private static DateTime _lastErrorShown = DateTime.MinValue;
