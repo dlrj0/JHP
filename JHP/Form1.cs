@@ -479,6 +479,8 @@ public partial class Form1 : Form
             {
                 if (HostIs(host, "reanime.to"))
                     await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.ReanimeAutoOptions);
+                else if (HostIs(host, "miruro.to"))
+                    await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.MiruroAutoOptions);
                 return;
             }
             if (HostIs(host, "laftel.net"))
@@ -487,6 +489,8 @@ public partial class Form1 : Form
                 await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.NetflixSkipNext);
             else if (HostIs(host, "reanime.to"))
                 await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.ReanimeAutoOptions);
+            else if (HostIs(host, "miruro.to"))
+                await webView.CoreWebView2.ExecuteScriptAsync(UserScripts.MiruroAutoOptions);
         }
         catch { }
     }
