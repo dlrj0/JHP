@@ -147,4 +147,16 @@ public class AlarmSchedulerTests
         s.ApplyChanges(Enabled(), snap, Enabled(), custom);
         Assert.Equal(60, s.GetCustomRemaining(0));
     }
+
+    [Theory]
+    [InlineData(0, "00:00")]
+    [InlineData(-5, "00:00")]
+    [InlineData(55, "00:55")]
+    [InlineData(100, "01:40")]
+    [InlineData(3599, "59:59")]
+    [InlineData(3600, "1:00:00")]
+    [InlineData(7200, "2:00:00")]
+    [InlineData(7325, "2:02:05")]
+    public void FormatRemaining_UsesMinutesSecondsUnderAnHour(int seconds, string expected) =>
+        Assert.Equal(expected, AlarmScheduler.FormatRemaining(seconds));
 }

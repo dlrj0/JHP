@@ -58,6 +58,15 @@ public sealed class AlarmScheduler
         return toFire;
     }
 
+    /// <summary>타이틀바 남은 시간 표기: 1시간 미만은 "mm:ss", 이상은 "h:mm:ss". 음수는 0으로 본다.</summary>
+    public static string FormatRemaining(int seconds)
+    {
+        var t = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        return t.TotalHours >= 1
+            ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}"
+            : $"{t.Minutes:00}:{t.Seconds:00}";
+    }
+
     /// <summary>켜져 있는 알람 중 가장 가까운 남은 초. 켜진 알람이 없으면 null.</summary>
     public int? MinRemaining(IReadOnlyList<bool> enabled, IReadOnlyList<CustomAlarm> custom)
     {

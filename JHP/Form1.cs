@@ -65,14 +65,6 @@ public partial class Form1 : Form
         toolTip.SetToolTip(lblNext, "다음 알람까지 남은 시간");
     }
 
-    private static string FormatRemaining(int seconds)
-    {
-        var t = TimeSpan.FromSeconds(Math.Max(0, seconds));
-        return t.TotalHours >= 1
-            ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}"
-            : $"{t.Minutes:00}:{t.Seconds:00}";
-    }
-
     private async void Form1_Load(object? sender, EventArgs e)
     {
         InitControls();
@@ -570,7 +562,7 @@ public partial class Form1 : Form
 
         int? min = _alarms.MinRemaining(_config.AlarmEnabled, _config.CustomAlarms);
 
-        SetNextText(min is null ? "--:--" : FormatRemaining(min.Value), Color.FromArgb(110, 220, 140));
+        SetNextText(min is null ? "--:--" : AlarmScheduler.FormatRemaining(min.Value), Color.FromArgb(110, 220, 140));
         string tip = min is null
             ? "다음 알람: --:--:--"
             : $"다음 알람: {TimeSpan.FromSeconds(min.Value):hh\\:mm\\:ss}";
