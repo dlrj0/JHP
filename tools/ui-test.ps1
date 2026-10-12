@@ -692,6 +692,14 @@ try {
     if (-not $proc2.HasExited) { $proc2.Kill() }
 
     # ---------- 10. 잠긴/읽기 전용 설정 파일: 시작은 되고, 기존 파일을 덮어쓰지 않으며, 종료도 정상 ----------
+    # 툴팁/알림 창이 MainWindowHandle로 잡히지 않도록 제목이 'JHP'인 최상위 창을 직접 찾는다
+    function Get-MainHandle($p) {
+        foreach ($h in [Win]::TopWindows([uint32]$p.Id)) {
+            $sb = New-Object System.Text.StringBuilder 256; [Win]::GetWindowText($h, $sb, 256) | Out-Null
+            if ($sb.ToString() -eq 'JHP') { return $h }
+        }
+        return [IntPtr]::Zero
+    }
     function Start-AndClose([scriptblock]$beforeClose) {
         if (-not $KeepOnScreen) { $env:JHP_OFFSCREEN = '1' }
         $pp = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
@@ -700,12 +708,12 @@ try {
         for ($i = 0; $i -lt 40; $i++) {
             Start-Sleep -Milliseconds 250; $pp.Refresh()
             if ($pp.HasExited) { break }
-            if ($pp.MainWindowHandle -ne [IntPtr]::Zero -and $i -ge 12) { $up = $true; break }
+            if ((Get-MainHandle $pp) -ne [IntPtr]::Zero -and $i -ge 12) { $up = $true; break }
         }
         if ($beforeClose) { & $beforeClose }
         $closed = $false
         if (-not $pp.HasExited) {
-            [Win]::PostMessage($pp.MainWindowHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+            [Win]::PostMessage((Get-MainHandle $pp), 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
             $closed = $pp.WaitForExit(8000)
             if (-not $closed) { $pp.Kill() }
         }

@@ -74,8 +74,8 @@ public partial class Form1 : Form
         {
             float s = DeviceDpi / 96f;
             var area = Screen.FromPoint(new Point(_config.X, _config.Y)).WorkingArea;
-            int w = Math.Min(Math.Max((int)(_config.Width * s), MinimumSize.Width), area.Width);
-            int h = Math.Min(Math.Max((int)(_config.Height * s), MinimumSize.Height), area.Height);
+            int w = Math.Min(Math.Max((int)Math.Round(_config.Width * s), MinimumSize.Width), area.Width);
+            int h = Math.Min(Math.Max((int)Math.Round(_config.Height * s), MinimumSize.Height), area.Height);
             Size = new Size(w, h);
         }
 
@@ -98,13 +98,13 @@ public partial class Form1 : Form
 
         // 타이머는 자동 시작 안 함 — 사용자가 timerButton 클릭 시 시작 (ToggleTimer에서만 timer.Start())
 
-        Config.SaveFailed += OnConfigSaveFailed;
+        Config.SaveFailed += ShowNotice;
         await InitWV();
         CheckUpdateAsync();
     }
 
     // 설정 저장 실패는 첫 번째 한 번만 알린다. 모달 대화상자 대신 타이틀바 아래 툴팁으로 잠깐 보여 준다(사냥 중 방해 최소화).
-    private void OnConfigSaveFailed(string message)
+    private void ShowNotice(string message)
     {
         if (IsDisposed || !IsHandleCreated) return;
         BeginInvoke(() =>
@@ -374,7 +374,18 @@ public partial class Form1 : Form
             var env = await CoreWebView2Environment.CreateAsync(userDataFolder: cacheDir);
             await webView.EnsureCoreWebView2Async(env);
 
-            webView.CoreWebView2.NavigationCompleted += (_, e) => { if (e.IsSuccess) InjectJS(); };
+            webView.CoreWebView2.NavigationCompleted += (_, e) =>
+            {
+                if (!e.IsSuccess) return;
+                InjectJS();
+                // 강제 종료/전원 차단에도 마지막으로 본 주소가 남도록 이동이 끝날 때마다 저장해 둔다(http/https만)
+                string? current = webView.CoreWebView2?.Source;
+                if (JHP.Api.Site.TryNormalizeUrl(current, out string normalized) && normalized != _config.LatestUrl)
+                {
+                    _config.LatestUrl = normalized;
+                    ScheduleSave();
+                }
+            };
             // 링크 클릭으로 열리는 새 창(target=_blank)은 별도 창 대신 이 창에서 연다.
             // 크기/위치를 지정한 팝업(window.open 기능 지정: 로그인 등 opener가 필요한 창)은 기본 동작을 유지한다.
             webView.CoreWebView2.NewWindowRequested += (_, e) =>
@@ -390,8 +401,14 @@ public partial class Form1 : Form
             {
                 // 종료 중이 아니고, 짧은 시간에 반복 실패해도 무한 새로고침되지 않도록 횟수를 제한한다.
                 // 오래 켜 둔 상태에서 가끔 죽는 경우를 위해, 마지막 복구로부터 5분이 지나면 횟수를 다시 센다.
-                if (e.ProcessFailedKind != CoreWebView2ProcessFailedKind.RenderProcessExited
-                    || IsDisposed || !IsHandleCreated) return;
+                if (IsDisposed || !IsHandleCreated) return;
+                if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.BrowserProcessExited)
+                {
+                    // 브라우저 프로세스(런타임 업데이트/비정상 종료)는 컨트롤을 새로 만들어야 하므로 앱 재시작을 안내한다
+                    ShowNotice("웹 화면이 종료되었습니다. JHP를 다시 실행해 주세요.");
+                    return;
+                }
+                if (e.ProcessFailedKind != CoreWebView2ProcessFailedKind.RenderProcessExited) return;
                 long now = Environment.TickCount64;
                 if (now - _lastRecoveryMs > 5 * 60_000) _renderRecoveries = 0;
                 _lastRecoveryMs = now;
@@ -1274,8 +1291,8 @@ public partial class Form1 : Form
             _config.X = bounds.X;
             _config.Y = bounds.Y;
             float s = DeviceDpi / 96f;
-            _config.Width = (int)(bounds.Width / s);
-            _config.Height = (int)(bounds.Height / s);
+            _config.Width = (int)Math.Round(bounds.Width / s);   // 절삭하면 배율 환산을 거치며 1px씩 줄어든다
+            _config.Height = (int)Math.Round(bounds.Height / s);
         }
 
         // 최소화한 채 종료해도 직전 상태(최대화 여부)를 유지한다

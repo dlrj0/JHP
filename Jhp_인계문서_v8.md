@@ -382,3 +382,5 @@ timerButton.RightClick  // 우클릭 전용 이벤트
   - 보류(설계 결정 필요): ▼ 메뉴/알람 설정에 키보드만으로 접근하는 경로(현재 `btnMenu.TabStop=false`, Tab 순서가 웹 화면 먼저 — 키보드 포커스를 웹에 두려는 의도), 볼륨/투명도 숫자 직접 입력의 키보드 진입·붙여넣기 처리, `NSlider`의 접근성 값 노출
 - [x] A7 `tools/ui-test.ps1`: "alarm controls not found"/"alarm window did not open"는 SKIP이 아니라 FAIL로 기록(컨트롤 이름/구조 변경이 조용히 통과되지 않게), 시간 초과 SKIP은 건수를 결과 끝에 표시 ("[A7]" 커밋). 검증: 기본 57/57
 - [x] A8 볼륨/투명도 숫자 직접 입력: 붙여넣기로 들어온 숫자 아닌 글자는 걸러 냄 ("[A8]" 커밋). 검증: 빌드 0 오류, ui-test 57/57
+- [x] A9 서브에이전트 점검(DPI/WebView2) 반영 ("[A9]" 커밋): ① 창 크기 저장/복원의 배율 환산을 `Math.Round`로(1px씩 줄어듦 방지) ② 이동이 끝날 때마다 `LatestUrl` 저장(`NavigationCompleted`, http/https만 — 강제 종료/전원 차단 대비) ③ `BrowserProcessExited`는 툴팁으로 재실행 안내(`OnConfigSaveFailed` → `ShowNotice`로 이름 변경) ④ ui-test: 메인 창 핸들을 제목 'JHP'로 찾음(알림 툴팁이 MainWindowHandle로 잡히던 문제). 검증: 빌드 0 오류, ui-test 74/74
+  - 보류(설계/실사이트 검증 필요): 팝업 광고가 메인 창을 이동시키거나 항상 위에서 가려지는 문제(`NewWindowRequested` 정책), HTML 전체화면 시 타이틀바 숨김(원본 동작 불명), PerMonitorV2, 테두리 숨김의 웹 36px 이동
