@@ -71,6 +71,7 @@ public partial class Form1 : Form
             Location = new Point(-20000, 0);
 
         LayoutTitleBar();
+        ApplyHotkey();
 
         // 최대화 복원은 웹뷰 초기화 전에 해서, 일반 크기로 떴다가 커지는 깜빡임을 줄인다.
         if (_config.IsMaximize)
@@ -591,6 +592,7 @@ public partial class Form1 : Form
                 SiteListOps.DisplayName(_config.Sites, i, _config.DefaultSite), menu.Font).Width);
         textWidth = Math.Max(textWidth, TextRenderer.MeasureText("다른 창 선택 시 테두리 안보이기", menu.Font).Width);
         textWidth = Math.Max(textWidth, TextRenderer.MeasureText("알람 울릴 때 영상 음소거", menu.Font).Width);
+        textWidth = Math.Max(textWidth, TextRenderer.MeasureText("전역 단축키 (Ctrl+Alt+J: 타이머 시작/정지)", menu.Font).Width);
         int itemWidth = textWidth + (int)(70 * DeviceDpi / 96f);
         int itemHeight = menu.Font.Height + (int)(14 * DeviceDpi / 96f); // AutoSize=false 항목은 높이를 직접 지정해야 배율에서 글자가 잘리지 않는다
 
@@ -637,6 +639,21 @@ public partial class Form1 : Form
             _config.Save();
         };
         menu.Items.Add(muteItem);
+
+        var hotkeyItem = new ToolStripMenuItem("전역 단축키 (Ctrl+Alt+J: 타이머 시작/정지)")
+        {
+            CheckOnClick = true,
+            Checked = _config.HotkeyEnabled,
+            AutoSize = false,
+            Size = new Size(itemWidth, itemHeight)
+        };
+        hotkeyItem.CheckedChanged += (_, _) =>
+        {
+            _config.HotkeyEnabled = hotkeyItem.Checked;
+            ApplyHotkey();
+            _config.Save();
+        };
+        menu.Items.Add(hotkeyItem);
 
         var exportItem = new ToolStripMenuItem("설정 내보내기…") { AutoSize = false, Size = new Size(itemWidth, itemHeight) };
         exportItem.Click += (_, _) => BeginInvoke(ExportSettings);
@@ -693,6 +710,45 @@ public partial class Form1 : Form
         if (IsDisposed) return;
         if (WindowState == FormWindowState.Minimized) WindowState = _lastNonMinimizedState;
         Activate();
+    }
+
+    // ===== 전역 단축키 (옵트인) =====
+    // 다른 프로그램을 쓰는 중에도 Ctrl+Alt+J로 타이머를 시작/정지한다. 기본은 꺼짐이며 ▼ 메뉴에서 켠다.
+    private const int WM_HOTKEY = 0x0312;
+    private const int HotkeyId = 0x4A48;
+    private const uint MOD_ALT = 0x1, MOD_CONTROL = 0x2, MOD_NOREPEAT = 0x4000;
+    private const uint VK_J = 0x4A;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    private void ApplyHotkey()
+    {
+        if (!IsHandleCreated) return;
+        UnregisterHotKey(Handle, HotkeyId);
+        if (!_config.HotkeyEnabled) return;
+
+        if (!RegisterHotKey(Handle, HotkeyId, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_J))
+        {
+            // 다른 프로그램이 이미 쓰는 조합이면 켜지지 않는다 — 설정도 꺼 둔다
+            _config.HotkeyEnabled = false;
+            _config.Save();
+            ShowMessage("전역 단축키 Ctrl+Alt+J를 등록하지 못했습니다. 다른 프로그램이 이미 사용 중일 수 있습니다.",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == WM_HOTKEY && m.WParam.ToInt32() == HotkeyId)
+        {
+            BeginInvoke(ToggleTimer);
+            return;
+        }
+        base.WndProc(ref m);
     }
 
     // ===== 설정 내보내기/가져오기 =====
@@ -777,6 +833,7 @@ public partial class Form1 : Form
         sliderVolume.Value = Math.Clamp(_config.Volume, sliderVolume.Minimum, sliderVolume.Maximum);
         sliderOpacity.Value = Math.Clamp((int)Math.Round(_config.Opacity * 100), sliderOpacity.Minimum, sliderOpacity.Maximum);
         TopMost = _config.TopMost;
+        ApplyHotkey();
         Synth.Instance.SetRate(_config.Rate);
         for (int i = 0; i < 8; i++) _remaining[i] = AlarmSeconds[i];
         for (int i = 0; i < 3; i++) _customRemaining[i] = _config.CustomAlarms[i].Tick;
@@ -1084,6 +1141,7 @@ public partial class Form1 : Form
     private void Form1_FormClosing(object? sender, FormClosingEventArgs e)
     {
         timer.Stop();
+        if (IsHandleCreated) UnregisterHotKey(Handle, HotkeyId);
         Synth.Instance.PlaybackFinished -= Synth_PlaybackFinished;
         Synth.Instance.Stop();
         RestoreVideoMute(); // 종료 시 음소거 상태를 남기지 않는다

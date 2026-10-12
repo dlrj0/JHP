@@ -449,7 +449,7 @@ try {
     if ($popup -ne [IntPtr]::Zero) {
         $me = Get-Elements $popup -NoHandleOk
         $names = ($me | Where-Object { $_.Name } | ForEach-Object { $_.Name })
-        foreach ($want in '항상 위에 표시', '다른 창 선택 시 테두리 안보이기', '알람 울릴 때 영상 음소거', '설정 내보내기…', '설정 가져오기…', '넷플릭스', '라프텔', '웨이브', '티빙', '쿠팡플레이', '디즈니플러스', '유튜브', '＋ 사이트 추가') {
+        foreach ($want in '항상 위에 표시', '다른 창 선택 시 테두리 안보이기', '알람 울릴 때 영상 음소거', '전역 단축키 (Ctrl+Alt+J: 타이머 시작/정지)', '설정 내보내기…', '설정 가져오기…', '넷플릭스', '라프텔', '웨이브', '티빙', '쿠팡플레이', '디즈니플러스', '유튜브', '＋ 사이트 추가') {
             Check "menu: '$want' 항목" (($names -contains $want) -or ($names -contains "$want (시작)"))   # 시작 사이트는 이름 뒤에 (시작)이 붙는다
         }
         Save-Window $popup '06-menu' | Out-Null

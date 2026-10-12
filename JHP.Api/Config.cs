@@ -38,6 +38,7 @@ public class Config
     public bool TopMost { get; set; } = false;
     public bool IsHideWindowBorderOnFocusOut { get; set; } = false;
     public bool MuteVideoOnAlarm { get; set; } = false;
+    public bool HotkeyEnabled { get; set; } = false;   // 전역 단축키 Ctrl+Alt+J = 타이머 시작/정지 (기본 꺼짐)
     public List<Site> Sites { get; set; } = [];
     public string DefaultSite { get; set; } = "";
     public bool[] AlarmEnabled { get; set; } = new bool[8];
@@ -166,6 +167,7 @@ public class Config
         TopMost = other.TopMost;
         IsHideWindowBorderOnFocusOut = other.IsHideWindowBorderOnFocusOut;
         MuteVideoOnAlarm = other.MuteVideoOnAlarm;
+        HotkeyEnabled = other.HotkeyEnabled;
         Sites = other.Sites;
         DefaultSite = other.DefaultSite;
         AlarmEnabled = other.AlarmEnabled;

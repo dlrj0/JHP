@@ -328,3 +328,4 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 - [리뷰 반영 2] 서브에이전트 리뷰(checkpoint-4 이후 diff) 5건 반영: 가져오기 시 알람창 닫기, `DefaultSite` 보정(Normalize), 시작 직후 두 번째 실행 신호 보존(`pendingShow`), 최소화 복원 시 직전 상태 사용(`BringToFrontFromAnotherInstance`), 메시지 상자를 `WithDialogState`로 감쌈. 되돌리기: `git revert` 해당 커밋
 - [AlarmForm 직접 배치] `Anchor=Right/Bottom` 제거 → `LayoutRightAligned()`(Resize/Shown에서 호출). 되돌리기: `git revert` 해당 커밋 (`JHP/AlarmForm.cs`)
 - [타이틀바 더블클릭 최대화] `pnlTitleBar`/`lblTitle` `MouseDoubleClick` → `btnMaximize.PerformClick()` (`JHP/Form1.cs`). 자동 검증 불가 → 사용자 육안 확인 필요. 되돌리기: `git revert` 해당 커밋
+- [전역 단축키] `RegisterHotKey`(Ctrl+Alt+J), `Config.HotkeyEnabled`(기본 false), ▼ 메뉴 체크. `Form1.WndProc`의 WM_HOTKEY → `ToggleTimer`. 되돌리기: `git revert` 해당 커밋. 실제 키 입력은 사용자 PC를 건드리므로 자동 검증하지 않음 → 사용자 확인 필요(조합 변경 희망 시 `VK_J`)
