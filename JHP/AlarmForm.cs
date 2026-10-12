@@ -13,6 +13,9 @@ public class AlarmForm : Form
         "경쿠 (15분)", "유니온 버프 (10분)", "메소 회수 (100초)", "파운틴 (55초)"
     ];
 
+    // 입력 칸 배경 (사이트 추가창과 같은 값)
+    private static readonly Color InputBack = Color.FromArgb(50, 50, 50);
+
     private readonly CheckBox[] _alarmChecks = new CheckBox[8];
     private readonly TextBox[] _customNames = new TextBox[3];
     private readonly NumericUpDown[] _customTicks = new NumericUpDown[3];
@@ -105,6 +108,9 @@ public class AlarmForm : Form
         {
             Left = 108, Top = y, Width = ClientSize.Width - 120 - 46,
             DropDownStyle = ComboBoxStyle.DropDown,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = InputBack,
+            ForeColor = Color.White,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
         try
@@ -180,13 +186,19 @@ public class AlarmForm : Form
             _customNames[i] = new TextBox
             {
                 Left = 36, Top = y, Width = 190, PlaceholderText = "알람 이름",
+                BackColor = InputBack,
+                ForeColor = Color.White,
+                BorderStyle = BorderStyle.FixedSingle,
                 Anchor = AnchorStyles.Top | AnchorStyles.Left
             };
             Controls.Add(_customNames[i]);
 
             _customTicks[i] = new NumericUpDown
             {
-                Left = 234, Top = y, Width = 80, Minimum = 0, Maximum = 99999
+                Left = 234, Top = y, Width = 80, Minimum = 0, Maximum = 99999,
+                BackColor = InputBack,
+                ForeColor = Color.White,
+                BorderStyle = BorderStyle.FixedSingle
             };
             Controls.Add(_customTicks[i]);
 

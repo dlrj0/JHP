@@ -316,3 +316,4 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 | 단일 인스턴스 안내 | 같은 폴더에서 JHP를 다시 실행하면 새로 띄우지 않고 기존 창을 복원·활성화 (`EventWaitHandle` `<mutex>_show`) | `JHP/Program.cs` | `git revert` 해당 커밋 (이전 동작: 조용히 종료) |
 
 - 예약 작업 `JHP-Claude-Resume`을 오늘 15:29부터 1시간 간격(최대 19:00 무렵까지)으로 다시 설정함. 프롬프트의 19:00 종료 규칙은 그대로.
+- [다크 입력 칸] 알람 설정창의 ComboBox/TextBox/NumericUpDown 배경·글자색을 다크로 (`AlarmForm.InputBack`, `JHP/AlarmForm.cs`). 되돌리기: `git revert` 해당 커밋 (이전: 흰 입력 칸)
