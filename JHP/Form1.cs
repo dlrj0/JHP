@@ -109,7 +109,7 @@ public partial class Form1 : Form
         if (IsDisposed || !IsHandleCreated) return;
         BeginInvoke(() =>
         {
-            try { toolTip.Show(message, this, 12, 44, 10000); } catch { }
+            try { float s = DeviceDpi / 96f; toolTip.Show(message, this, (int)(12 * s), (int)(44 * s), 10000); } catch { }
         });
     }
 
@@ -447,17 +447,34 @@ public partial class Form1 : Form
             if (string.Equals(_config.SkippedVersion, latest, StringComparison.OrdinalIgnoreCase)) return;
             // 예상한 저장소 주소만 연다 (응답이 비정상이어도 임의의 주소/경로를 실행하지 않음)
             if (!url.StartsWith("https://github.com/dlrj0/JHP", StringComparison.OrdinalIgnoreCase)) return;
-            var answer = Prompt.ShowYesNoCancel("업데이트 알림",
-                $"새 버전 {latest}이 있습니다.\n\n예: 다운로드 페이지 열기\n아니오: 이 버전은 다시 묻지 않음\n취소(Esc): 나중에", this);
+
+            // 게임 등 다른 창을 쓰는 중에 대화상자가 포커스를 가져가 키 입력이 들어가지 않도록,
+            // 이 창이 활성화되어 있을 때만 바로 띄우고 아니면 다음에 활성화될 때 띄운다.
+            _pendingUpdate = (latest, url);
+            if (ReferenceEquals(Form.ActiveForm, this)) ShowPendingUpdatePrompt();
+        }
+        catch { } // 업데이트 확인 실패가 앱 동작에 영향을 주지 않도록 한다
+    }
+
+    private (string Latest, string Url)? _pendingUpdate;
+
+    private void ShowPendingUpdatePrompt()
+    {
+        if (_pendingUpdate is not { } update) return;
+        _pendingUpdate = null;
+        try
+        {
+            var answer = WithDialogState(() => Prompt.ShowYesNoCancel("업데이트 알림",
+                $"새 버전 {update.Latest}이 있습니다.\n\n예: 다운로드 페이지 열기\n아니오: 이 버전은 다시 묻지 않음\n취소(Esc): 나중에", this));
             if (answer == DialogResult.Yes)
-                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+                Process.Start(new ProcessStartInfo(update.Url) { UseShellExecute = true });
             else if (answer == DialogResult.No)
             {
-                _config.SkippedVersion = latest;
+                _config.SkippedVersion = update.Latest;
                 ScheduleSave();
             }
         }
-        catch { } // 업데이트 확인 실패가 앱 동작에 영향을 주지 않도록 한다
+        catch { }
     }
 
     // ===== 알람 타이머 =====
@@ -1046,7 +1063,7 @@ public partial class Form1 : Form
         public event EventHandler? DeleteRequested;
         public event EventHandler? ManageRequested;
 
-        public SiteMenuItem(Site site, string displayText) : base(displayText)
+        public SiteMenuItem(Site site, string displayText) : base(displayText.Replace("&", "&&"))   // 이름의 &가 밑줄 단축키로 처리되지 않게
         {
             SiteInfo = site;
         }
@@ -1216,8 +1233,8 @@ public partial class Form1 : Form
     // ===== 포커스 아웃 시 테두리 숨김 =====
     private void Form1_Activated(object? sender, EventArgs e)
     {
-        if (!_config.IsHideWindowBorderOnFocusOut) return;
-        pnlTitleBar.Visible = true;
+        if (_config.IsHideWindowBorderOnFocusOut) pnlTitleBar.Visible = true;
+        if (_pendingUpdate is not null) BeginInvoke(ShowPendingUpdatePrompt);   // 활성화 처리가 끝난 뒤에 띄운다
     }
 
     private void Form1_Deactivate(object? sender, EventArgs e)

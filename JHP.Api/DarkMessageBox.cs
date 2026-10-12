@@ -100,7 +100,11 @@ public static class DarkMessageBox
             }
 
             Controls.Add(layout);
-            if (first is not null) AcceptButton = first;                          // Enter = 첫 버튼(확인/예)
+            if (first is not null)
+            {
+                AcceptButton = first;                                             // Enter = 첫 버튼(확인/예)
+                ActiveControl = first;                                            // 역순으로 넣은 탓에 첫 탭 스톱이 마지막 버튼이므로 초기 포커스를 직접 지정
+            }
             CancelButton = row.Controls.OfType<Button>().FirstOrDefault(b => b.DialogResult == _closeResult);
 
             // 자식 컨트롤을 모두 추가한 뒤에 배율 모드를 지정한다 (앞에서 하면 빈 폼에만 적용됨)

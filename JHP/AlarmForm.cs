@@ -76,7 +76,8 @@ public class AlarmForm : Form
         {
             // 위치는 _pnlTitle.Resize에서 계산 (Anchor는 패널 기본 폭 기준이라 어긋날 수 있음)
             Location = new Point(_pnlTitle.Width - 46, 1),
-            Type = ControlButton.ButtonType.Close
+            Type = ControlButton.ButtonType.Close,
+            AccessibleName = "닫기"
         };
         btnClose.Click += (_, _) => Close();
         _pnlTitle.Resize += (_, _) => btnClose.Left = _pnlTitle.Width - btnClose.Width;
@@ -133,7 +134,8 @@ public class AlarmForm : Form
             Left = ClientSize.Width - 12 - 40, Top = y - 1, Width = 40, Height = 26,
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(60, 60, 60),
-            ForeColor = Color.White
+            ForeColor = Color.White,
+            AccessibleName = "알람 소리 미리 듣기"
         };
         _btnPlay = btnPlay;
         btnPlay.FlatAppearance.BorderSize = 0;
@@ -163,7 +165,8 @@ public class AlarmForm : Form
         _tbVolume = new NSlider
         {
             Left = 108, Top = y + 4, Width = ClientSize.Width - 120,
-            Minimum = 0, Maximum = 100
+            Minimum = 0, Maximum = 100,
+            AccessibleName = "볼륨"
         };
         _tbVolume.ValueChanged += (s, e) => _lblVolume.Text = $"볼륨: {_tbVolume.Value}";
         Controls.Add(_tbVolume);
@@ -173,7 +176,8 @@ public class AlarmForm : Form
         _tbRate = new NSlider
         {
             Left = 108, Top = y + 4, Width = ClientSize.Width - 120,
-            Minimum = -10, Maximum = 10
+            Minimum = -10, Maximum = 10,
+            AccessibleName = "TTS 속도"
         };
         _tbRate.ValueChanged += (s, e) => _lblRate.Text = $"TTS 속도: {_tbRate.Value}";
         Controls.Add(_tbRate);
@@ -183,12 +187,12 @@ public class AlarmForm : Form
         y += 22;
         for (int i = 0; i < 3; i++)
         {
-            _customEnabled[i] = new CheckBox { Left = 12, Top = y + 2, Width = 20 };
+            _customEnabled[i] = new CheckBox { Left = 12, Top = y + 2, Width = 20, AccessibleName = $"커스텀 알람 {i + 1} 사용" };
             Controls.Add(_customEnabled[i]);
 
             _customNames[i] = new TextBox
             {
-                Left = 36, Top = y, Width = 190, PlaceholderText = "알람 이름",
+                Left = 36, Top = y, Width = 190, PlaceholderText = "알람 이름", AccessibleName = $"커스텀 알람 {i + 1} 이름",
                 BackColor = InputBack,
                 ForeColor = Color.White,
                 BorderStyle = BorderStyle.FixedSingle
@@ -197,7 +201,7 @@ public class AlarmForm : Form
 
             _customTicks[i] = new NumericUpDown
             {
-                Left = 234, Top = y, Width = 80, Minimum = 0, Maximum = 99999,
+                Left = 234, Top = y, Width = 80, Minimum = 0, Maximum = 99999, AccessibleName = $"커스텀 알람 {i + 1} 주기(초)",
                 BackColor = InputBack,
                 ForeColor = Color.White,
                 BorderStyle = BorderStyle.FixedSingle

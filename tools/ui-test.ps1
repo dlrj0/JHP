@@ -352,13 +352,14 @@ try {
     }
     function Get-AlarmControls([IntPtr]$h) {
         $ae = @(Get-Elements $h)
-        # UIA 이름: 커스텀 알람 체크박스는 옆 라벨('커스텀 알람'/'초')이 이름이 되고, 이름 칸은 '', 초 칸의 Edit는 '회전자'
-        $nameEdits = @($ae | Where-Object { $_.Type -eq 'Edit' -and [string]::IsNullOrEmpty($_.Name) } | Sort-Object T)
-        $tickEdits = @($ae | Where-Object { $_.Type -eq 'Edit' -and $_.Name -eq '회전자' } | Sort-Object T)
+        # UIA 이름: 커스텀 알람 행의 컨트롤은 AccessibleName('커스텀 알람 N 사용/이름/주기(초)')을 가진다.
+        # (초 칸의 내부 Edit는 '회전자' 또는 위 이름으로 보일 수 있어 둘 다 허용)
+        $nameEdits = @($ae | Where-Object { $_.Type -eq 'Edit' -and $_.Name -match '^커스텀 알람 \d 이름$' } | Sort-Object T)
+        $tickEdits = @($ae | Where-Object { $_.Type -eq 'Edit' -and ($_.Name -eq '회전자' -or $_.Name -match '^커스텀 알람 \d 주기\(초\)$') } | Sort-Object T)
         [pscustomobject]@{
             Check1   = $ae | Where-Object { $_.Type -eq 'CheckBox' -and $_.Name -eq '재획비 (2시간)' } | Select-Object -First 1
             Check2   = $ae | Where-Object { $_.Type -eq 'CheckBox' -and $_.Name -eq '경쿠 (1시간)' } | Select-Object -First 1
-            Customs  = @($ae | Where-Object { $_.Type -eq 'CheckBox' -and ($_.Name -eq '커스텀 알람' -or $_.Name -eq '초') } | Sort-Object T)
+            Customs  = @($ae | Where-Object { $_.Type -eq 'CheckBox' -and $_.Name -match '^커스텀 알람 \d 사용$' } | Sort-Object T)
             NameEdits = $nameEdits
             TickEdits = $tickEdits
             Ok       = $ae | Where-Object { $_.Type -eq 'Button' -and $_.Name -eq '확인' } | Select-Object -First 1

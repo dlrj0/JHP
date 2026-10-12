@@ -377,3 +377,6 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 - [x] A4 남은 시간 표기(`FormatRemaining`)를 `AlarmScheduler`로 옮기고 단위 테스트 추가(57개) ("[A4]" 커밋)
 - [x] A3 서브에이전트 리뷰(Form1/컨트롤) 반영 ("[A3]" 커밋): ① 렌더러 복구 횟수를 마지막 복구 5분 후 다시 셈(오래 켜 둔 상태에서 가끔 죽어도 계속 복구) ② `WM_GETMINMAXINFO` 때 `MaximizedBounds` 갱신(모니터 이동/작업 표시줄 변경 후 최대화 영역) ③ WebView2 초기화 실패 대화상자의 소유자를 메인 창으로(항상 위 상태에서 가려지지 않음) ④ 사이트 이동 후 `webView.Focus()`. 검증: 빌드 0 오류, ui-test 74/74(-IncludeMenu)
   - 보류: `BrowserProcessExited`(WebView2 런타임 자동 업데이트 등)는 컨트롤 재생성이 필요해 미처리 — 발생 시 앱 재시작 안내가 필요할 수 있음
+- [x] A6 키보드/접근성/UX 점검 반영 ("[A6]" 커밋): ① `DarkMessageBox` 초기 포커스를 첫 버튼(예/확인)으로(역순 추가 때문에 Enter가 아니오/취소로 가던 문제) ② 업데이트 알림은 메인 창이 활성일 때만 띄우고 아니면 다음 활성화 때 띄움(게임 중 포커스·키 입력 탈취 방지) + `WithDialogState` 적용 ③ 사이트 이름의 `&`가 메뉴에서 사라지지 않게 이스케이프 ④ 저장 실패 툴팁 좌표 DPI 환산 ⑤ 알람창 슬라이더/커스텀 알람 행/닫기·▷ 버튼 `AccessibleName` 추가(ui-test의 UIA 검색 이름도 갱신: '커스텀 알람 N 사용/이름/주기(초)'). 검증: 빌드 0 오류, 단위 57/57, ui-test 74/74(-IncludeMenu)
+  - 주의: ui-test에서 "alarm controls not found"는 FAIL이 아니라 SKIP으로 집계됨 → 컨트롤 이름/구조를 바꾸면 SKIP 목록을 반드시 확인할 것(이번에 AccessibleName 추가로 한 번 발생해 수정)
+  - 보류(설계 결정 필요): ▼ 메뉴/알람 설정에 키보드만으로 접근하는 경로(현재 `btnMenu.TabStop=false`, Tab 순서가 웹 화면 먼저 — 키보드 포커스를 웹에 두려는 의도), 볼륨/투명도 숫자 직접 입력의 키보드 진입·붙여넣기 처리, `NSlider`의 접근성 값 노출
