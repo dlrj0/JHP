@@ -94,6 +94,12 @@ public class SiteForm : Form
         AutoScaleMode = AutoScaleMode.Dpi;
     }
 
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        DarkTitleBar.Apply(Handle);   // 시스템 타이틀바를 다크로
+    }
+
     private void BtnOk_Click(object? sender, EventArgs e)
     {
         if (string.IsNullOrWhiteSpace(_tbName.Text) || string.IsNullOrWhiteSpace(_tbUrl.Text))

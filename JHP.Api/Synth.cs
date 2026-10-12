@@ -24,6 +24,9 @@ public class Synth
     /// </summary>
     public event Action? PlaybackFinished;
 
+    // 재생(Ring/TTS/Stop)마다 증가한다. 늦게 도착한 이전 재생의 완료 알림이 새 재생 중의 영상 음소거를 풀지 않게 구분한다.
+    private int _generation;
+
     private Synth()
     {
         try
@@ -48,10 +51,11 @@ public class Synth
     // 재생할 소리가 없거나 짧은 시스템 소리로 대체된 경우: 잠시 뒤 끝난 것으로 알린다
     private void RaiseFinishedLater()
     {
+        int gen = Volatile.Read(ref _generation);
         Task.Run(async () =>
         {
             await Task.Delay(1000).ConfigureAwait(false);
-            RaiseFinished();
+            if (gen == Volatile.Read(ref _generation)) RaiseFinished();   // 그 사이 다른 재생이 시작/중단됐으면 알리지 않음
         });
     }
 
@@ -61,6 +65,7 @@ public class Synth
         try
         {
             Stop();
+            Interlocked.Increment(ref _generation);
             // 작업 디렉터리가 아니라 exe 위치 기준 (바로가기 실행 시에도 alarm 폴더를 찾도록).
             // 파일명만 사용해 alarm 폴더 밖의 파일을 가리키지 못하게 한다.
             string path = Path.Combine(AppContext.BaseDirectory, "alarm", Path.GetFileName(alarmName ?? ""));
@@ -85,6 +90,7 @@ public class Synth
     {
         try
         {
+            Interlocked.Increment(ref _generation);
             if (_synthesizer is null)
             {
                 RaiseFinishedLater();
@@ -133,6 +139,7 @@ public class Synth
                 player.Dispose();
             }
             reader?.Dispose();
+            Interlocked.Increment(ref _generation);
             _synthesizer?.SpeakAsyncCancelAll();
         }
         catch { }

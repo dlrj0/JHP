@@ -47,7 +47,8 @@ public class DarkMenuRenderer : ToolStripProfessionalRenderer
     {
         using var pen = new Pen(Color.FromArgb(55, 55, 55));
         int midY = e.Item.Height / 2;
-        e.Graphics.DrawLine(pen, 4, midY, e.Item.Width - 4, midY);
+        int pad = (int)Math.Round(4 * (e.Item.Owner?.DeviceDpi ?? 96) / 96f);
+        e.Graphics.DrawLine(pen, pad, midY, e.Item.Width - pad, midY);
     }
 
     private sealed class DarkColorTable : ProfessionalColorTable

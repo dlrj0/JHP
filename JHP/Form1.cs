@@ -115,13 +115,14 @@ public partial class Form1 : Form
 
     // 창의 타이틀바 쪽(위 40px)이 어느 화면의 작업 영역과 충분히(가로 100px 이상) 겹치는지 확인한다.
     // 모니터를 분리했거나 해상도가 바뀌어 창이 화면 밖에 있으면 기본 위치를 쓰게 한다.
-    private static bool IsOnScreen(Rectangle bounds)
+    private bool IsOnScreen(Rectangle bounds)
     {
-        var strip = new Rectangle(bounds.X, bounds.Y, Math.Max(bounds.Width, 1), 40);
+        float s = DeviceDpi / 96f;   // 40/100/20px는 96dpi 기준 값 → 현재 배율로 환산
+        var strip = new Rectangle(bounds.X, bounds.Y, Math.Max(bounds.Width, 1), (int)(40 * s));
         foreach (Screen screen in Screen.AllScreens)
         {
             var hit = Rectangle.Intersect(screen.WorkingArea, strip);
-            if (hit.Width >= 100 && hit.Height >= 20) return true;
+            if (hit.Width >= (int)(100 * s) && hit.Height >= (int)(20 * s)) return true;
         }
         return false;
     }
