@@ -381,3 +381,4 @@ timerButton.RightClick  // 우클릭 전용 이벤트
   - 주의: ui-test에서 "alarm controls not found"는 FAIL이 아니라 SKIP으로 집계됨 → 컨트롤 이름/구조를 바꾸면 SKIP 목록을 반드시 확인할 것(이번에 AccessibleName 추가로 한 번 발생해 수정)
   - 보류(설계 결정 필요): ▼ 메뉴/알람 설정에 키보드만으로 접근하는 경로(현재 `btnMenu.TabStop=false`, Tab 순서가 웹 화면 먼저 — 키보드 포커스를 웹에 두려는 의도), 볼륨/투명도 숫자 직접 입력의 키보드 진입·붙여넣기 처리, `NSlider`의 접근성 값 노출
 - [x] A7 `tools/ui-test.ps1`: "alarm controls not found"/"alarm window did not open"는 SKIP이 아니라 FAIL로 기록(컨트롤 이름/구조 변경이 조용히 통과되지 않게), 시간 초과 SKIP은 건수를 결과 끝에 표시 ("[A7]" 커밋). 검증: 기본 57/57
+- [x] A8 볼륨/투명도 숫자 직접 입력: 붙여넣기로 들어온 숫자 아닌 글자는 걸러 냄 ("[A8]" 커밋). 검증: 빌드 0 오류, ui-test 57/57

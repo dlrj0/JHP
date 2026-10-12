@@ -237,7 +237,18 @@ public partial class Form1 : Form
         tbInlineEdit.KeyDown += InlineEdit_KeyDown;
         tbInlineEdit.MaxLength = 3;
         tbInlineEdit.KeyPress += (_, e) => e.Handled = !char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar); // 숫자만 입력
-        tbInlineEdit.TextChanged += (_, _) => ApplyInlineEditLive();
+        tbInlineEdit.TextChanged += (_, _) =>
+        {
+            // 붙여넣기(Ctrl+V)로 들어온 숫자 아닌 글자는 KeyPress 필터를 지나가므로 여기서 걸러 낸다
+            string digits = new string(tbInlineEdit.Text.Where(char.IsAsciiDigit).ToArray());
+            if (digits != tbInlineEdit.Text)
+            {
+                tbInlineEdit.Text = digits;           // TextChanged가 다시 들어와 아래 반영을 수행한다
+                tbInlineEdit.SelectionStart = digits.Length;
+                return;
+            }
+            ApplyInlineEditLive();
+        };
         tbInlineEdit.LostFocus += (_, _) => CommitInlineEdit();
 
         // V버튼: 사이트 목록 + 사이트 추가 + 항상위/테두리숨김 드롭다운
