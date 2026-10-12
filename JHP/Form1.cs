@@ -28,6 +28,8 @@ public partial class Form1 : Form
     private bool[]? _alarmEnabledSnapshot;                     // 알람 설정창을 열 때의 값 (확인 시 바뀐 항목만 리셋)
     private (bool Enabled, int Tick)[]? _customSnapshot;
 
+    protected override bool ShowWithoutActivation => Program.TestOffscreen;
+
     public Form1()
     {
         InitializeComponent();

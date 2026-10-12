@@ -11,6 +11,9 @@ static class Program
         catch { return null; }
     }
 
+    // 자동 테스트(JHP_OFFSCREEN=1)로 띄운 창은 활성화(포커스 이동)하지 않는다. 사용자가 작업 중인 창의 포커스를 빼앗지 않기 위함.
+    internal static readonly bool TestOffscreen = Environment.GetEnvironmentVariable("JHP_OFFSCREEN") == "1";
+
     [STAThread]
     static void Main()
     {

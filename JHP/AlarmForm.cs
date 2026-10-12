@@ -36,6 +36,8 @@ public class AlarmForm : Form
     // 확인 버튼으로 닫혔는지 (비모달 폼이라 DialogResult 대신 사용)
     public bool Accepted { get; private set; }
 
+    protected override bool ShowWithoutActivation => Program.TestOffscreen;
+
     public AlarmForm()
     {
         InitializeComponent();
