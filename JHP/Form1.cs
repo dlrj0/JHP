@@ -135,12 +135,23 @@ public partial class Form1 : Form
         MaximizedBounds = new Rectangle(wa.X - screen.Bounds.X, wa.Y - screen.Bounds.Y, wa.Width, wa.Height);
     }
 
+    private bool _htmlFullscreen;           // 웹 페이지가 HTML 전체화면 상태
+    private bool _titleHiddenByFocusOut;    // '다른 창 선택 시 테두리 안보이기'로 타이틀바를 숨긴 상태
+
+    // 타이틀바/리사이즈 핸들 표시: 전체화면 중에는 모두 숨기고, 아니면 창 상태(일반일 때만 핸들)에 따른다
+    private void ApplyChromeVisibility()
+    {
+        bool normal = WindowState == FormWindowState.Normal;
+        pnlResizeLeft.Visible = pnlResizeRight.Visible = pnlResizeBottom.Visible = normal && !_htmlFullscreen;
+        pnlTitleBar.Visible = !_htmlFullscreen && !_titleHiddenByFocusOut;
+    }
+
     private void OnWindowStateChanged()
     {
         if (WindowState != FormWindowState.Minimized) _lastNonMinimizedState = WindowState;
 
         bool normal = WindowState == FormWindowState.Normal;
-        pnlResizeLeft.Visible = pnlResizeRight.Visible = pnlResizeBottom.Visible = normal; // 최대화 중엔 리사이즈 핸들 없음
+        ApplyChromeVisibility();   // 최대화 중엔 리사이즈 핸들 없음
         btnMaximize.Type = WindowState == FormWindowState.Maximized
             ? ControlButton.ButtonType.Restore
             : ControlButton.ButtonType.Maximize;
@@ -390,11 +401,17 @@ public partial class Form1 : Form
             // 크기/위치를 지정한 팝업(window.open 기능 지정: 로그인 등 opener가 필요한 창)은 기본 동작을 유지한다.
             webView.CoreWebView2.NewWindowRequested += (_, e) =>
             {
-                if (e.IsUserInitiated is false) return;
                 if (e.WindowFeatures.HasSize || e.WindowFeatures.HasPosition) return;
+                if (e.IsUserInitiated is false) { e.Handled = true; return; }   // 클릭 없이 스스로 뜨는 팝업(광고 등)은 차단
                 if (!JHP.Api.Site.TryNormalizeUrl(e.Uri, out string target)) return;
                 e.Handled = true;
                 try { webView.CoreWebView2.Navigate(target); } catch { }
+            };
+            // 영상 사이트의 전체화면 버튼(HTML 전체화면): 영상이 창 전체를 쓰도록 타이틀바/리사이즈 핸들을 숨기고, 해제되면 되돌린다
+            webView.CoreWebView2.ContainsFullScreenElementChanged += (_, _) =>
+            {
+                _htmlFullscreen = webView.CoreWebView2?.ContainsFullScreenElement ?? false;
+                ApplyChromeVisibility();
             };
             // 렌더러 프로세스가 죽으면 빈 화면으로 남으므로 새로고침한다
             webView.CoreWebView2.ProcessFailed += (_, e) =>
@@ -1261,7 +1278,11 @@ public partial class Form1 : Form
     // ===== 포커스 아웃 시 테두리 숨김 =====
     private void Form1_Activated(object? sender, EventArgs e)
     {
-        if (_config.IsHideWindowBorderOnFocusOut) pnlTitleBar.Visible = true;
+        if (_config.IsHideWindowBorderOnFocusOut || _titleHiddenByFocusOut)
+        {
+            _titleHiddenByFocusOut = false;
+            ApplyChromeVisibility();
+        }
         if (_pendingUpdate is not null) BeginInvoke(ShowPendingUpdatePrompt);   // 활성화 처리가 끝난 뒤에 띄운다
     }
 
@@ -1270,7 +1291,8 @@ public partial class Form1 : Form
         if (!_config.IsHideWindowBorderOnFocusOut) return;
         // 알람 설정창/사이트 추가창을 쓰는 동안(메인 창이 비활성화됨)에는 타이틀바를 숨기지 않는다
         if (_modalDepth > 0 || _alarmForm is { IsDisposed: false }) return;
-        pnlTitleBar.Visible = false;
+        _titleHiddenByFocusOut = true;
+        ApplyChromeVisibility();
     }
 
     // ===== 종료 시 설정 저장 =====
