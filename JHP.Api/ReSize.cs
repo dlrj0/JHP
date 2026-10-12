@@ -2,7 +2,7 @@
 
 public static class ReSize
 {
-    private const int RESIZE_THICK = 8; // 마우스 드래그 감지 영역(px)
+    private const int RESIZE_THICK = 8; // 마우스 드래그 감지 영역(96dpi 기준 px)
 
     public enum MousePosition
     {
@@ -12,10 +12,11 @@ public static class ReSize
 
     public static MousePosition GetMousePosition(Form form, Point cursor)
     {
-        bool left = cursor.X <= RESIZE_THICK;
-        bool right = cursor.X >= form.Width - RESIZE_THICK;
-        bool top = cursor.Y <= RESIZE_THICK;
-        bool bottom = cursor.Y >= form.Height - RESIZE_THICK;
+        int thick = (int)Math.Round(RESIZE_THICK * form.DeviceDpi / 96f);
+        bool left = cursor.X <= thick;
+        bool right = cursor.X >= form.Width - thick;
+        bool top = cursor.Y <= thick;
+        bool bottom = cursor.Y >= form.Height - thick;
 
         if (top && left) return MousePosition.TopLeft;
         if (top && right) return MousePosition.TopRight;

@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace JHP.Api;
@@ -7,7 +7,42 @@ public class Config
 {
     private static Config? _instance;
     private static readonly object _lock = new();
-    private static readonly string ConfigPath = "config.json";
+    private static readonly string ConfigPath = Path.Combine(DataDirectory, "config.json");
+
+    // 설정/캐시를 두는 폴더. 기본은 exe 폴더이며, 쓸 수 없는 위치(Program Files 등)면 %LOCALAPPDATA%\JHP로 대체한다.
+    private static string? _dataDirectory;
+    public static string DataDirectory => _dataDirectory ??= ResolveDataDirectory();
+
+    private static string ResolveDataDirectory()
+    {
+        string exeDir = AppContext.BaseDirectory;
+        if (File.Exists(Path.Combine(exeDir, "config.json")) || CanWrite(exeDir)) return exeDir;   // 기존 설정이 있으면 일시적 쓰기 실패로 위치를 바꾸지 않는다
+        try
+        {
+            string fallback = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JHP");
+            Directory.CreateDirectory(fallback);
+            if (CanWrite(fallback)) return fallback;
+        }
+        catch { }
+        return exeDir;
+    }
+
+    private static bool CanWrite(string dir)
+    {
+        try
+        {
+            string probe = Path.Combine(dir, ".jhp-write-" + Environment.ProcessId + ".tmp");
+            File.WriteAllText(probe, "");
+            File.Delete(probe);
+            return true;
+        }
+        catch { return false; }
+    }
+
+    // 저장에 처음 실패했을 때 한 번만 발생한다 (UI 스레드가 아닐 수 있음). 인수는 사용자에게 보여 줄 설명.
+    public static event Action<string>? SaveFailed;
+    private static bool _saveFailureReported;
+    private static readonly object _saveLock = new();
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -37,6 +72,8 @@ public class Config
     public bool IsMaximize { get; set; } = false;
     public bool TopMost { get; set; } = false;
     public bool IsHideWindowBorderOnFocusOut { get; set; } = false;
+    public bool MuteVideoOnAlarm { get; set; } = false;
+    public bool HotkeyEnabled { get; set; } = false;   // 전역 단축키 Ctrl+Alt+Shift+F10 = 타이머 시작/정지 (기본 꺼짐)
     public List<Site> Sites { get; set; } = [];
     public string DefaultSite { get; set; } = "";
     public bool[] AlarmEnabled { get; set; } = new bool[8];
@@ -47,6 +84,31 @@ public class Config
         new CustomAlarm(), new CustomAlarm(), new CustomAlarm()
     ];
     public string LatestUrl { get; set; } = "";
+    public string SkippedVersion { get; set; } = "";   // "이 버전은 다시 묻지 않음"으로 건너뛴 업데이트 태그
+
+    // 읽기 실패(잠김 등) 때문에 기본값으로 시작한 경우 true — 이때 Save()가 정상 파일을 덮어쓰지 않게 한다
+    private static bool _loadFailed;
+
+    private static string ReadAllTextWithRetry(string path)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            try { return File.ReadAllText(path); }
+            catch (IOException) when (attempt < 4) { Thread.Sleep(150); }
+        }
+    }
+
+    // 손상된 설정의 사본을 남긴다. 이미 사본이 있으면 덮어쓰지 않고 시각이 붙은 이름으로 따로 보관한다.
+    private static void PreserveCorrupt()
+    {
+        try
+        {
+            string target = ConfigPath + ".corrupt";
+            if (File.Exists(target)) target = ConfigPath + ".corrupt-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
+            File.Copy(ConfigPath, target, overwrite: true);
+        }
+        catch { }
+    }
 
     private static Config Load()
     {
@@ -54,21 +116,136 @@ public class Config
         {
             if (File.Exists(ConfigPath))
             {
-                string json = File.ReadAllText(ConfigPath);
-                return JsonSerializer.Deserialize<Config>(json, JsonOptions) ?? new Config();
+                string json = ReadAllTextWithRetry(ConfigPath);
+                var loaded = JsonSerializer.Deserialize<Config>(json, JsonOptions);
+                if (loaded is not null) return loaded.Normalize();
+                // 내용이 null 등 쓸 수 없는 값이면 손상된 것으로 취급
+                PreserveCorrupt();
             }
         }
-        catch { }
-        return new Config();
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 백신/동기화 등이 파일을 잠근 경우: 파일은 멀쩡하므로 기본값으로 시작하되 이번 실행에서는 덮어쓰지 않는다.
+            _loadFailed = true;
+        }
+        catch
+        {
+            // 설정 파일이 손상된 경우: 다음 저장에서 덮어써 사라지지 않도록 사본을 남기고 기본값으로 시작한다.
+            PreserveCorrupt();
+        }
+
+        // 설정 파일이 없거나(첫 실행) 읽을 수 없을 때 원본 재획플레이어의 기본 사이트 목록을 채워 준다.
+        var config = new Config();
+        {
+            config.Sites =
+            [
+                new Site { Name = "넷플릭스", Url = "https://www.netflix.com" },
+                new Site { Name = "라프텔", Url = "https://laftel.net" },
+                new Site { Name = "웨이브", Url = "https://www.wavve.com" },
+                new Site { Name = "티빙", Url = "https://www.tving.com" },
+                new Site { Name = "쿠팡플레이", Url = "https://www.coupangplay.com" },
+                new Site { Name = "디즈니플러스", Url = "https://www.disneyplus.com" },
+                new Site { Name = "유튜브", Url = "https://www.youtube.com" },
+            ];
+            config.DefaultSite = "유튜브";
+        }
+        return config;
     }
 
-    public void Save()
+    // 손으로 고치거나 구버전/손상된 파일에서 온 값을 앱이 쓰는 범위로 보정한다 (배열 길이, null, 범위).
+    // 이 값들이 그대로 들어가면 알람 설정창/타이머에서 예외가 나 앱이 종료된다.
+    private Config Normalize()
+    {
+        Width = Width > 0 ? Width : 800;
+        Height = Height > 0 ? Height : 600;
+        Opacity = double.IsNaN(Opacity) ? 1.0 : Math.Clamp(Opacity, 0.3, 1.0);
+        Volume = Math.Clamp(Volume, 0, 100);
+        Rate = Math.Clamp(Rate, -10, 10);
+
+        // 주소는 http/https만 허용한다(가져온/손으로 고친 파일의 file:, javascript: 등은 목록에서 제외). 스킴이 없으면 https://를 붙인다.
+        Sites = (Sites ?? []).Where(s => s is not null && Site.TryNormalizeUrl(s.Url, out _)).ToList();
+        foreach (var s in Sites)
+        {
+            Site.TryNormalizeUrl(s.Url, out string normalized);
+            s.Url = s.Url.Contains("://") ? s.Url.Trim() : normalized;   // 이미 올바른 주소는 사용자가 쓴 형태를 유지
+            s.Name ??= s.Url;
+        }
+        DefaultSite ??= "";
+        if (!Sites.Any(s => s.Name == DefaultSite)) DefaultSite = ""; // 목록에 없는 이름이 남지 않게
+        AlarmName ??= "";
+        LatestUrl = Site.TryNormalizeUrl(LatestUrl, out string latest) ? latest : "";
+        SkippedVersion ??= "";
+
+        var enabled = new bool[8];
+        if (AlarmEnabled is not null)
+            Array.Copy(AlarmEnabled, enabled, Math.Min(AlarmEnabled.Length, enabled.Length));
+        AlarmEnabled = enabled;
+
+        var custom = (CustomAlarms ?? []).Where(c => c is not null).Take(3).ToList();
+        while (custom.Count < 3) custom.Add(new CustomAlarm());
+        foreach (var c in custom)
+        {
+            c.Name ??= "";
+            c.Tick = Math.Clamp(c.Tick, 0, 99999);
+        }
+        CustomAlarms = custom;
+        return this;
+    }
+
+    // 저장에 성공하면 true. 실패하면 false를 돌려주고, 첫 실패 때만 SaveFailed를 발생시킨다.
+    public bool Save()
+    {
+        if (_loadFailed)
+        {
+            ReportSaveFailure("설정 파일을 읽지 못해(다른 프로그램이 사용 중일 수 있음) 이번 실행의 변경은 저장되지 않습니다.");
+            return false;
+        }
+        try
+        {
+            // 임시 파일에 쓴 뒤 교체해, 저장 도중 종료되어도 설정 파일이 반쯤 써진 상태로 남지 않게 한다.
+            // 고정된 임시 파일 이름을 쓰므로 동시에 두 번 저장이 겹치지 않게 직렬화한다.
+            lock (_saveLock)
+            {
+                string tmp = ConfigPath + ".tmp";
+                File.WriteAllText(tmp, JsonSerializer.Serialize(this, JsonOptions));
+                File.Move(tmp, ConfigPath, overwrite: true);
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ReportSaveFailure($"설정을 저장하지 못했습니다: {ex.Message} (위치: {ConfigPath})");
+            return false;
+        }
+    }
+
+    private static void ReportSaveFailure(string message)
+    {
+        if (_saveFailureReported) return;
+        _saveFailureReported = true;
+        try { SaveFailed?.Invoke(message); } catch { }
+    }
+
+    // 설정을 다른 위치의 파일로 내보낸다. 실패하면 false.
+    public bool ExportTo(string path)
     {
         try
         {
-            File.WriteAllText(ConfigPath, JsonSerializer.Serialize(this, JsonOptions));
+            File.WriteAllText(path, JsonSerializer.Serialize(this, JsonOptions));
+            return true;
         }
-        catch { }
+        catch { return false; }
+    }
+
+    // 내보낸 설정 파일을 읽어 보정까지 마친 Config를 돌려준다. 읽을 수 없거나 형식이 틀리면 null.
+    public static Config? ReadFrom(string path)
+    {
+        try
+        {
+            var loaded = JsonSerializer.Deserialize<Config>(File.ReadAllText(path), JsonOptions);
+            return loaded?.Normalize();
+        }
+        catch { return null; }
     }
 
     public void Replace(Config other)
@@ -83,6 +260,8 @@ public class Config
         IsMaximize = other.IsMaximize;
         TopMost = other.TopMost;
         IsHideWindowBorderOnFocusOut = other.IsHideWindowBorderOnFocusOut;
+        MuteVideoOnAlarm = other.MuteVideoOnAlarm;
+        HotkeyEnabled = other.HotkeyEnabled;
         Sites = other.Sites;
         DefaultSite = other.DefaultSite;
         AlarmEnabled = other.AlarmEnabled;
@@ -90,5 +269,6 @@ public class Config
         Tts = other.Tts;
         CustomAlarms = other.CustomAlarms;
         LatestUrl = other.LatestUrl;
+        SkippedVersion = other.SkippedVersion;
     }
 }
