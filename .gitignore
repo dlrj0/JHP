@@ -447,3 +447,4 @@ alarm/*.mp3
 *.user
 *.suo
 .vs/
+!JHP/Properties/PublishProfiles/*.pubxml

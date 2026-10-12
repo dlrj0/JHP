@@ -13,7 +13,9 @@ public partial class Form1 : Form
     // 알람이 울릴 때 TTS로 읽는 이름 (원본 재획플레이어의 항목명)
     private static readonly string[] AlarmNames = ["재획비", "경쿠", "경뿌/경쿠/유니온", "유니온 버프", "경쿠", "유니온 버프", "메소 회수", "파운틴"];
 
-    private const string CurrentVersion = "v1.1.0";
+    // 버전의 단일 출처는 JHP.csproj의 <Version>
+    private static readonly string CurrentVersion =
+        "v" + (typeof(Form1).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0");
 
     private readonly Config _config = Config.Instance;
     private readonly int[] _remaining = new int[8];

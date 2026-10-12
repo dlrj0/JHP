@@ -346,7 +346,7 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 ### 다음 리셋 작업 큐 (2026-10-12 작성, 예약 작업 `JHP-Claude-Resume`이 이 순서로 진행)
 사용자 입력/육안 확인 없이 가능한 것만. 끝낸 항목은 `[x]`로 바꾸고 커밋 해시를 적습니다. 상세 지시는 `C:\Users\wjgus\.claude\jhp-resume-prompt.txt`.
 
-- [ ] Q1 릴리스 준비: `<Version>` 단일 출처 + `CurrentVersion`을 어셈블리 버전에서 읽기, `alarm/` 폴더 출력, 게시 프로필(self-contained win-x64). Release 생성은 하지 않음
+- [x] Q1 (커밋 해시는 `git log`의 "[Q1]") 릴리스 준비: `<Version>` 단일 출처 + `CurrentVersion`을 어셈블리 버전에서 읽기, `alarm/` 폴더 출력, 게시 프로필(self-contained win-x64). Release 생성은 하지 않음
 - [ ] Q2 UpdateChecker: Octokit → HttpClient(타임아웃 5초), 프리릴리스/비정상 태그 비교 보강, "이 버전은 다시 묻지 않음"(`SkippedVersion`)
 - [ ] Q3 설정 저장 실패 대응: `Save()` bool 반환 + 첫 실패 알림, 쓰기 불가 시 `%LOCALAPPDATA%\JHP\` 대체, WebView2 초기화 실패 메시지에 원인 포함, 잠긴/읽기 전용 설정 테스트
 - [ ] Q4 UI 테스트 갭: 알람 발화·남은 시간 라벨 카운트다운/재충전, 항목 껐다 켜기 리셋, 사이트 관리 메뉴(-IncludeMenu)
