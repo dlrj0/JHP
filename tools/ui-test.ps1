@@ -329,7 +329,7 @@ try {
         # 모든 컨트롤이 창 안에 있고 서로 가려지지 않는지(가로 잘림 확인)
         $ar = Get-Rect $alarm
         $outside = $ae | Where-Object { $_.W -gt 0 -and ($_.L + $_.W) -gt ($ar.R + 2) }
-        Check 'alarm: 컨트롤이 창 밖으로 나가지 않음' ($outside.Count -eq 0) ("outside=" + (($outside | Select-Object -First 3 | ForEach-Object { $_.Name }) -join ','))
+        Check 'alarm: 컨트롤이 창 밖으로 나가지 않음' ($outside.Count -eq 0) ("outside=" + (($outside | Select-Object -First 3 | ForEach-Object { $_.Name + '[L=' + $_.L + ',W=' + $_.W + ']' }) -join ',') + " win.L=$($ar.L) win.R=$($ar.R)")
         Save-Window $alarm '05-alarm' | Out-Null
         # 토글: 같은 버튼 우클릭 → 닫힘
         $timerBtn = ((Get-Elements $main) | Where-Object { $_.Type -eq 'Button' } | Sort-Object L)[1]
@@ -449,7 +449,7 @@ try {
     if ($popup -ne [IntPtr]::Zero) {
         $me = Get-Elements $popup -NoHandleOk
         $names = ($me | Where-Object { $_.Name } | ForEach-Object { $_.Name })
-        foreach ($want in '항상 위에 표시', '다른 창 선택 시 테두리 안보이기', '알람 울릴 때 영상 음소거', '전역 단축키 (Ctrl+Alt+J)', '설정 내보내기…', '설정 가져오기…', '넷플릭스', '라프텔', '웨이브', '티빙', '쿠팡플레이', '디즈니플러스', '유튜브', '＋ 사이트 추가') {
+        foreach ($want in '항상 위에 표시', '다른 창 선택 시 테두리 안보이기', '알람 울릴 때 영상 음소거', '전역 단축키 (Ctrl+Alt+Shift+F10)', '설정 내보내기…', '설정 가져오기…', '넷플릭스', '라프텔', '웨이브', '티빙', '쿠팡플레이', '디즈니플러스', '유튜브', '＋ 사이트 추가') {
             Check "menu: '$want' 항목" (($names -contains $want) -or ($names -contains "$want (시작)"))   # 시작 사이트는 이름 뒤에 (시작)이 붙는다
         }
         Save-Window $popup '06-menu' | Out-Null

@@ -336,3 +336,6 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 - 새 기능을 넣을 때마다 위 목록(게임 프로세스를 읽거나 건드리는 기능)에 해당하지 않는지 확인합니다. 제재 여부는 넥슨의 정책에 달려 있어 코드로 보장할 수는 없으며, 보수적으로 "게임을 전혀 건드리지 않는다"를 유지합니다.
 - [새 창 정책] `NewWindowRequested`: 사용자 조작 + 크기/위치 미지정 + http(s)면 같은 창에서 Navigate. OAuth 등 팝업은 건드리지 않음. 실제 사이트에서의 동작은 자동 검증 불가 → 사용자 확인 필요(문제 시 `Form1.InitWV`의 핸들러만 제거). 되돌리기: `git revert` 해당 커밋
 - [메뉴 정리] ▼ 메뉴에 구분선 추가, 단축키 문구를 `전역 단축키 (Ctrl+Alt+J)`로 축소(설명은 `ToolTipText`). `ui-test.ps1`의 메뉴 항목 이름도 같이 변경. 되돌리기: `git revert` 해당 커밋
+- [단축키 조합 변경] 게임 점검 지적(Ctrl=공격, Alt=점프, J=스킬 키와 겹쳐 입력 소실·오타이머 토글 위험)을 반영해 Ctrl+Alt+J → **Ctrl+Alt+Shift+F10**, 토글 시 TTS 음성 안내 추가. 되돌리기: `git revert` 해당 커밋
+- [UI 점검 반영] 서브에이전트 UI/UX 점검 결과 중 효과가 분명한 항목 반영(`Form1.cs`, `AlarmForm.cs`, `SiteForm.cs`, `NSlider.cs`, `Timerbutton.cs`): 남은 시간 라벨(`lblNext`), 클릭/드래그 후 `webView.Focus()`(`NSlider.DragCompleted`), 사이트 ✕ 삭제 확인, 알람창 NSlider 교체·세로 고정·`ShowInTaskbar=false`·테두리, 입력칸 라벨 가림. 되돌리기: `git revert` 해당 커밋
+- 보류(의도 확인 필요): '다른 창 선택 시 테두리 안보이기'가 타이틀바를 `Visible=false`로 숨겨 웹 화면이 36px 이동하는 점(원본 동작 의도일 수 있음), 메뉴/MessageBox 다크화(Prompt 커스텀 폼 필요), 창 버튼 전체 높이화

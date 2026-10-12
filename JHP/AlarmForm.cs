@@ -24,8 +24,8 @@ public class AlarmForm : Form
     private Panel _pnlTitle = null!;
     private ComboBox _tbAlarmName = null!;
     private CheckBox _cbTts = null!;
-    private TrackBar _tbVolume = null!;
-    private TrackBar _tbRate = null!;
+    private NSlider _tbVolume = null!;
+    private NSlider _tbRate = null!;
     private Label _lblVolume = null!;
     private Label _lblRate = null!;
     private Button _btnPlay = null!;
@@ -46,6 +46,7 @@ public class AlarmForm : Form
     {
         SuspendLayout();
         Text = "알람 설정";
+        ShowInTaskbar = false;   // 메인 창의 보조 창이므로 작업 표시줄에 별도 항목을 만들지 않는다
         Icon = Program.AppIcon ?? Icon;
         Width = 600;
         FormBorderStyle = FormBorderStyle.None;
@@ -137,6 +138,7 @@ public class AlarmForm : Form
         _btnPlay = btnPlay;
         btnPlay.FlatAppearance.BorderSize = 0;
         btnPlay.Click += (_, _) => Synth.Instance.Ring(_tbAlarmName.Text, _tbVolume.Value);
+        new ToolTip().SetToolTip(btnPlay, "알람 소리 미리 듣기");
         Controls.Add(btnPlay);
         y += 34;
 
@@ -157,25 +159,25 @@ public class AlarmForm : Form
         Controls.Add(btnSample);
         y += 30;
 
-        _lblVolume = AddLabel("볼륨: 0", 12, y + 8, 90);
-        _tbVolume = new TrackBar
+        _lblVolume = AddLabel("볼륨: 0", 12, y + 4, 90);
+        _tbVolume = new NSlider
         {
-            Left = 108, Top = y, Width = ClientSize.Width - 120,
-            Minimum = 0, Maximum = 100, TickFrequency = 10
+            Left = 108, Top = y + 4, Width = ClientSize.Width - 120,
+            Minimum = 0, Maximum = 100
         };
         _tbVolume.ValueChanged += (s, e) => _lblVolume.Text = $"볼륨: {_tbVolume.Value}";
         Controls.Add(_tbVolume);
-        y += 42;
+        y += 34;
 
-        _lblRate = AddLabel("TTS 속도: 0", 12, y + 8, 90);
-        _tbRate = new TrackBar
+        _lblRate = AddLabel("TTS 속도: 0", 12, y + 4, 90);
+        _tbRate = new NSlider
         {
-            Left = 108, Top = y, Width = ClientSize.Width - 120,
-            Minimum = -10, Maximum = 10, TickFrequency = 2
+            Left = 108, Top = y + 4, Width = ClientSize.Width - 120,
+            Minimum = -10, Maximum = 10
         };
         _tbRate.ValueChanged += (s, e) => _lblRate.Text = $"TTS 속도: {_tbRate.Value}";
         Controls.Add(_tbRate);
-        y += 42;
+        y += 34;
 
         AddLabel("커스텀 알람", 12, y, 200);
         y += 22;
@@ -251,7 +253,21 @@ public class AlarmForm : Form
 
         // 오른쪽/아래 정렬 컨트롤은 Anchor 대신 직접 배치한다 (Anchor는 부모 기본 크기 기준이라 배율에서 어긋남)
         Resize += (_, _) => LayoutRightAligned();
-        Shown += (_, _) => LayoutRightAligned();
+        Shown += (_, _) =>
+        {
+            LayoutRightAligned();
+            // 내용 높이보다 작게 줄이면 컨트롤이 겹치므로 세로 크기는 고정한다(가로만 조절)
+            MinimumSize = new Size(MinimumSize.Width, Height);
+            MaximumSize = new Size(16000, Height);   // 너비 0은 "제한 없음"이 아니라 폭 0으로 적용되는 경우가 있어 충분히 큰 값을 쓴다
+        };
+    }
+
+    // 어두운 사이트 위에서도 창 경계가 보이도록 1px 테두리
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        using var pen = new Pen(Color.FromArgb(80, 80, 80));
+        e.Graphics.DrawRectangle(pen, 0, 0, ClientSize.Width - 1, ClientSize.Height - 1);
     }
 
     // 폼 크기가 바뀌거나 배율이 적용된 뒤: 오른쪽 끝 정렬 컨트롤의 위치/폭과 하단 버튼 위치를 다시 계산한다 (좌표는 96dpi 기준 → s 배)

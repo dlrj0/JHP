@@ -10,6 +10,9 @@ public class NSlider : Control
 
     public event EventHandler? ValueChanged;
 
+    /// <summary>마우스로 끌기/클릭을 마쳤을 때 발생한다(키보드 조작은 해당 없음).</summary>
+    public event EventHandler? DragCompleted;
+
     // Value, Minimum, Maximum 각각 바로 위에 추가
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public int Value
@@ -96,7 +99,12 @@ public class NSlider : Control
 
     protected override void OnMouseDown(MouseEventArgs e) { Focus(); _dragging = true; UpdateValue(e.X); }
     protected override void OnMouseMove(MouseEventArgs e) { if (_dragging) UpdateValue(e.X); }
-    protected override void OnMouseUp(MouseEventArgs e) { _dragging = false; }
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        bool was = _dragging;
+        _dragging = false;
+        if (was) DragCompleted?.Invoke(this, EventArgs.Empty);
+    }
 
     private void UpdateValue(int x)
     {

@@ -59,6 +59,13 @@ public class TimerButton : Button
         g.DrawLine(pen, cx, cy, cx, cy - r + hand);                 // 12시 방향 바늘
         g.DrawLine(pen, cx, cy, cx + r - 2 * hand, cy);                 // 3시 방향 바늘
         g.DrawLine(pen, cx - hand, cy - r - hand, cx + hand, cy - r - hand);  // 상단 손잡이
+
+        // 키보드(Tab)로 포커스가 왔을 때만 보이는 표시 (NSlider와 같은 색)
+        if (Focused && ShowFocusCues)
+        {
+            using var ring = new Pen(Color.FromArgb(100, 160, 255), Math.Max(1f, s));
+            g.DrawRectangle(ring, 1, 1, Width - 3, Height - 3);
+        }
     }
 
     protected override void OnMouseUp(MouseEventArgs e)
@@ -78,6 +85,9 @@ public class TimerButton : Button
         base.OnMouseMove(e);
         if (!_hovered) { _hovered = true; Invalidate(); }
     }
+
+    protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
+    protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
 
     protected override void OnMouseEnter(EventArgs e) { _hovered = true; base.OnMouseEnter(e); Invalidate(); }
     protected override void OnMouseLeave(EventArgs e) { _hovered = false; base.OnMouseLeave(e); Invalidate(); }

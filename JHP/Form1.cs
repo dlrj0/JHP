@@ -34,6 +34,7 @@ public partial class Form1 : Form
     public Form1()
     {
         InitializeComponent();
+        CreateNextAlarmLabel();
         Icon = Program.AppIcon ?? Icon; // 작업 표시줄/Alt+Tab 아이콘 (Form 기본 아이콘 대신 exe에 포함된 앱 아이콘)
         Load += Form1_Load;
         FormClosing += Form1_FormClosing;
@@ -47,6 +48,32 @@ public partial class Form1 : Form
             // 다른 모니터로 옮긴 뒤 Win+↑ 등으로 최대화해도 해당 모니터의 작업 영역을 쓰도록 갱신
             if (WindowState == FormWindowState.Normal) UpdateMaximizedBounds();
         };
+    }
+
+    // 타이틀바에 항상 보이는 "다음 알람까지 남은 시간" (호버해야만 보이던 툴팁을 보완). 정지 중에는 --:--.
+    private Label lblNext = null!;
+
+    private void CreateNextAlarmLabel()
+    {
+        lblNext = new Label
+        {
+            AutoSize = true,
+            Text = "--:--",
+            Font = lblVolumeValue.Font,
+            ForeColor = Color.Gray,
+            Cursor = Cursors.Default
+        };
+        pnlTitleBar.Controls.Add(lblNext);
+        lblNext.MouseDown += TitleBar_MouseDown;
+        toolTip.SetToolTip(lblNext, "다음 알람까지 남은 시간");
+    }
+
+    private static string FormatRemaining(int seconds)
+    {
+        var t = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        return t.TotalHours >= 1
+            ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}"
+            : $"{t.Minutes:00}:{t.Seconds:00}";
     }
 
     private async void Form1_Load(object? sender, EventArgs e)
@@ -154,7 +181,11 @@ public partial class Form1 : Form
         btnClose.Click += (_, _) => Close();
 
         // timerButton: 좌클릭=시작/정지, 우클릭=알람설정
-        timerButton.Click += (_, _) => ToggleTimer();
+        timerButton.Click += (_, _) =>
+        {
+            ToggleTimer();
+            webView.Focus();   // 버튼에 포커스가 남아 영상의 Space 등 키를 가로채지 않게 한다
+        };
         timerButton.RightClick += (_, _) => OpenAlarmSettings();
         SetTimerTip("클릭하여 타이머 시작\n우클릭: 알람 설정");
         toolTip.SetToolTip(btnMenu, "사이트 목록 / 설정");
@@ -177,6 +208,7 @@ public partial class Form1 : Form
             ScheduleSave();
         };
         lblVolumeValue.Click += (_, _) => BeginInlineEdit("volume");
+        sliderVolume.DragCompleted += (_, _) => webView.Focus();   // 마우스로 조절한 뒤 화살표 키가 영상 탐색으로 가게
 
         // 투명도 (30~100%)
         sliderOpacity.Value = Math.Clamp((int)Math.Round(_config.Opacity * 100), sliderOpacity.Minimum, sliderOpacity.Maximum);
@@ -190,6 +222,7 @@ public partial class Form1 : Form
             ScheduleSave();
         };
         lblOpacityValue.Click += (_, _) => BeginInlineEdit("opacity");
+        sliderOpacity.DragCompleted += (_, _) => webView.Focus();
 
         // 인라인 편집 TextBox
         tbInlineEdit.KeyDown += InlineEdit_KeyDown;
@@ -257,6 +290,7 @@ public partial class Form1 : Form
         _inlineEditOriginal = value;
         tbInlineEdit.Text = value.ToString();
         tbInlineEdit.Location = new Point(lbl.Left, (pnlTitleBar.Height - tbInlineEdit.Height) / 2);
+        tbInlineEdit.Width = Math.Max(tbInlineEdit.Width, lbl.Width);   // 라벨 끝이 비쳐 보이지 않게(라벨은 그대로 두어 값 표시/접근성 유지)
         tbInlineEdit.Visible = true;
         tbInlineEdit.Focus();
         tbInlineEdit.SelectAll();
@@ -276,11 +310,11 @@ public partial class Form1 : Form
 
     private void CommitInlineEdit()
     {
-        if (_inlineEditTarget is null) { tbInlineEdit.Visible = false; return; }
+        if (_inlineEditTarget is null) { EndInlineEditUi(); return; }
 
         string target = _inlineEditTarget;
         _inlineEditTarget = null; // Visible=false로 LostFocus가 다시 들어와도 중복 처리되지 않게 먼저 비운다
-        tbInlineEdit.Visible = false;
+        EndInlineEditUi();
 
         if (!int.TryParse(tbInlineEdit.Text, out int val)) return;
 
@@ -288,6 +322,14 @@ public partial class Form1 : Form
             sliderVolume.Value = Math.Clamp(val, sliderVolume.Minimum, sliderVolume.Maximum);
         else
             sliderOpacity.Value = Math.Clamp(val, sliderOpacity.Minimum, sliderOpacity.Maximum);
+    }
+
+    // 입력 칸을 닫고 숨겨 둔 라벨을 다시 보이게 한다
+    private void EndInlineEditUi()
+    {
+        tbInlineEdit.Visible = false;
+        lblVolumeValue.Visible = true;
+        lblOpacityValue.Visible = true;
     }
 
     private void InlineEdit_KeyDown(object? sender, KeyEventArgs e)
@@ -298,7 +340,7 @@ public partial class Form1 : Form
             // 입력 중 이미 슬라이더에 반영됐으므로 원래 값으로 되돌린다
             string? target = _inlineEditTarget;
             _inlineEditTarget = null;
-            tbInlineEdit.Visible = false;
+            EndInlineEditUi();
             if (target == "volume") sliderVolume.Value = _inlineEditOriginal;
             else if (target == "opacity") sliderOpacity.Value = _inlineEditOriginal;
             e.SuppressKeyPress = true;
@@ -506,6 +548,7 @@ public partial class Form1 : Form
         if (!_timerRunning)
         {
             SetTimerTip("클릭하여 타이머 시작\n우클릭: 알람 설정");
+            SetNextText("--:--", Color.Gray);
             return;
         }
 
@@ -517,10 +560,17 @@ public partial class Form1 : Form
             if (_config.CustomAlarms[i].Enabled && _config.CustomAlarms[i].Tick > 0)
                 min = min is null ? _customRemaining[i] : Math.Min(min.Value, _customRemaining[i]);
 
+        SetNextText(min is null ? "--:--" : FormatRemaining(min.Value), Color.FromArgb(110, 220, 140));
         string tip = min is null
             ? "다음 알람: --:--:--"
             : $"다음 알람: {TimeSpan.FromSeconds(min.Value):hh\\:mm\\:ss}";
         SetTimerTip(tip + "\n클릭: 정지 / 우클릭: 알람 설정");
+    }
+
+    private void SetNextText(string text, Color color)
+    {
+        if (lblNext.Text != text) lblNext.Text = text;
+        if (lblNext.ForeColor != color) lblNext.ForeColor = color;
     }
 
     // 내용이 바뀔 때만 툴팁을 갱신한다 (매초 재설정하면 표시 중인 툴팁이 깜빡일 수 있음)
@@ -602,7 +652,7 @@ public partial class Form1 : Form
                 SiteListOps.DisplayName(_config.Sites, i, _config.DefaultSite), menu.Font).Width);
         textWidth = Math.Max(textWidth, TextRenderer.MeasureText("다른 창 선택 시 테두리 안보이기", menu.Font).Width);
         textWidth = Math.Max(textWidth, TextRenderer.MeasureText("알람 울릴 때 영상 음소거", menu.Font).Width);
-        textWidth = Math.Max(textWidth, TextRenderer.MeasureText("전역 단축키 (Ctrl+Alt+J)", menu.Font).Width);
+        textWidth = Math.Max(textWidth, TextRenderer.MeasureText("전역 단축키 (Ctrl+Alt+Shift+F10)", menu.Font).Width);
         int itemWidth = textWidth + (int)(70 * DeviceDpi / 96f);
         int itemHeight = menu.Font.Height + (int)(14 * DeviceDpi / 96f); // AutoSize=false 항목은 높이를 직접 지정해야 배율에서 글자가 잘리지 않는다
 
@@ -650,9 +700,9 @@ public partial class Form1 : Form
         };
         menu.Items.Add(muteItem);
 
-        var hotkeyItem = new ToolStripMenuItem("전역 단축키 (Ctrl+Alt+J)")
+        var hotkeyItem = new ToolStripMenuItem("전역 단축키 (Ctrl+Alt+Shift+F10)")
         {
-            ToolTipText = "다른 프로그램을 쓰는 중에도 Ctrl+Alt+J로 타이머를 시작/정지합니다",
+            ToolTipText = "다른 프로그램을 쓰는 중에도 Ctrl+Alt+Shift+F10으로 타이머를 시작/정지합니다(음성 안내)",
             CheckOnClick = true,
             Checked = _config.HotkeyEnabled,
             AutoSize = false,
@@ -696,12 +746,20 @@ public partial class Form1 : Form
             };
             item.DeleteRequested += (_, _) =>
             {
-                _config.Sites.Remove(site);
-                // 시작 사이트를 지웠으면(같은 이름이 남아 있지 않으면) 지정을 해제해 이름만 남지 않게 한다
-                if (site.Name == _config.DefaultSite && !_config.Sites.Any(s => s.Name == site.Name))
-                    _config.DefaultSite = "";
-                _config.Save();
-                menu.Items.Remove(item);
+                // 우측 끝을 잘못 눌러 바로 지워지지 않도록 확인한다(메뉴를 닫고 확인창을 띄운 뒤 목록을 다시 연다)
+                menu.Close();
+                BeginInvoke(() =>
+                {
+                    if (ShowMessage($"'{site.Name}' 사이트를 목록에서 삭제할까요?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                    {
+                        _config.Sites.Remove(site);
+                        // 시작 사이트를 지웠으면(같은 이름이 남아 있지 않으면) 지정을 해제해 이름만 남지 않게 한다
+                        if (site.Name == _config.DefaultSite && !_config.Sites.Any(s => s.Name == site.Name))
+                            _config.DefaultSite = "";
+                        _config.Save();
+                    }
+                    OpenSiteMenu();
+                });
             };
             menu.Items.Add(item);
         }
@@ -725,11 +783,12 @@ public partial class Form1 : Form
     }
 
     // ===== 전역 단축키 (옵트인) =====
-    // 다른 프로그램을 쓰는 중에도 Ctrl+Alt+J로 타이머를 시작/정지한다. 기본은 꺼짐이며 ▼ 메뉴에서 켠다.
+    // 다른 프로그램을 쓰는 중에도 Ctrl+Alt+Shift+F10으로 타이머를 시작/정지한다. 기본은 꺼짐이며 ▼ 메뉴에서 켠다.
+    // 게임 조작(Ctrl 공격, Alt 점프, 스킬 키)과 겹쳐 입력이 가로채이지 않도록 수식키 3개 + 기능키 조합을 쓴다.
     private const int WM_HOTKEY = 0x0312;
     private const int HotkeyId = 0x4A48;
-    private const uint MOD_ALT = 0x1, MOD_CONTROL = 0x2, MOD_NOREPEAT = 0x4000;
-    private const uint VK_J = 0x4A;
+    private const uint MOD_ALT = 0x1, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4, MOD_NOREPEAT = 0x4000;
+    private const uint VK_HOTKEY = 0x79;   // VK_F10
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -743,12 +802,12 @@ public partial class Form1 : Form
         UnregisterHotKey(Handle, HotkeyId);
         if (!_config.HotkeyEnabled) return;
 
-        if (!RegisterHotKey(Handle, HotkeyId, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_J))
+        if (!RegisterHotKey(Handle, HotkeyId, MOD_CONTROL | MOD_ALT | MOD_SHIFT | MOD_NOREPEAT, VK_HOTKEY))
         {
             // 다른 프로그램이 이미 쓰는 조합이면 켜지지 않는다 — 설정도 꺼 둔다
             _config.HotkeyEnabled = false;
             _config.Save();
-            ShowMessage("전역 단축키 Ctrl+Alt+J를 등록하지 못했습니다. 다른 프로그램이 이미 사용 중일 수 있습니다.",
+            ShowMessage("전역 단축키 Ctrl+Alt+Shift+F10을 등록하지 못했습니다. 다른 프로그램이 이미 사용 중일 수 있습니다.",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
@@ -757,7 +816,12 @@ public partial class Form1 : Form
     {
         if (m.Msg == WM_HOTKEY && m.WParam.ToInt32() == HotkeyId)
         {
-            BeginInvoke(ToggleTimer);
+            BeginInvoke(() =>
+            {
+                ToggleTimer();
+                // 화면을 보지 않고 눌러도 알 수 있게 짧은 음성으로 알린다
+                Synth.Instance.TTS(_timerRunning ? "타이머 시작" : "타이머 정지", _config.Volume, _config.Rate);
+            });
             return;
         }
         base.WndProc(ref m);
@@ -1088,7 +1152,7 @@ public partial class Form1 : Form
     // 라벨 폭은 "최대 글자수" 기준으로 예약해서 값이 바뀌어도(볼륨 5 → 100) 슬라이더와 겹치지 않는다.
     private void LayoutTitleBar()
     {
-        if (btnMinimize is null || sliderOpacity is null) return;
+        if (btnMinimize is null || sliderOpacity is null || lblNext is null) return;
 
         // 모든 px 값은 96dpi 기준 → 현재 DPI 배율(s)을 곱해 사용
         float s = DeviceDpi / 96f;
@@ -1110,7 +1174,11 @@ public partial class Form1 : Form
         timerButton.Top = (h - timerButton.Height) / 2;
         lblTitle.Top = (h - lblTitle.Height) / 2;
 
-        int startX = timerButton.Right + Px(16);
+        // 타이머 버튼 오른쪽: 다음 알람 남은 시간(h:mm:ss까지 들어가는 고정 폭)
+        int nextW = TextRenderer.MeasureText("0:00:00", lblNext.Font).Width + Px(4);
+        lblNext.Left = timerButton.Right + Px(8);
+        lblNext.Top = (h - lblNext.Height) / 2;
+        int startX = lblNext.Left + nextW + Px(12);
         int volLabelW = TextRenderer.MeasureText("볼륨 100", lblVolumeValue.Font).Width + Px(4);
         int opaLabelW = TextRenderer.MeasureText("투명도 100%", lblOpacityValue.Font).Width + Px(4);
 
