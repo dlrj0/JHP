@@ -320,6 +320,15 @@ public class AlarmForm : Form
         }
     }
 
+    // 숫자를 직접 입력한 뒤 Enter(=확인)를 누르면 NumericUpDown.Value가 아직 갱신되지 않은 채일 수 있다.
+    // 입력칸에 보이는 텍스트를 직접 해석하고, 해석할 수 없으면(빈 칸 등) 마지막 유효 값을 쓴다.
+    private static int ReadTick(NumericUpDown nud)
+    {
+        if (decimal.TryParse(nud.Text, out decimal typed))
+            return (int)Math.Clamp(typed, nud.Minimum, nud.Maximum);
+        return (int)nud.Value;
+    }
+
     private void BtnOk_Click(object? sender, EventArgs e)
     {
         var cfg = Config.Instance;
@@ -333,7 +342,7 @@ public class AlarmForm : Form
         for (int i = 0; i < 3; i++)
         {
             cfg.CustomAlarms[i].Name = _customNames[i].Text;
-            cfg.CustomAlarms[i].Tick = (int)_customTicks[i].Value;
+            cfg.CustomAlarms[i].Tick = ReadTick(_customTicks[i]);
             cfg.CustomAlarms[i].Enabled = _customEnabled[i].Checked;
         }
         cfg.Save();

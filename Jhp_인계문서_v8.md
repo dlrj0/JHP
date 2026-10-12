@@ -369,3 +369,5 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 
 ### 추가 작업 2 (2026-10-12 16:50~, 예약 작업 종료 후 직접 진행)
 - [x] A1 알람 틱 계산을 `JHP.Api/AlarmScheduler.cs`(순수 클래스)로 분리, `Form1`은 호출만 함(동작 불변). 단위 테스트 10개 추가(`AlarmSchedulerTests`: 경계/겹침/커스텀/리셋 규칙). 검증: 빌드 0 오류, 단위 48/48, ui-test 57/57. 되돌리기: 해당 "[A1]" 커밋 revert
+- [x] A2 서브에이전트 리뷰(Api 계층)에서 확인된 결함 수정 ("[A2]" 커밋): ① `Config.Normalize`가 사이트/LatestUrl을 http(s)만 허용(스킴 없으면 https:// 보정, 나머지는 목록에서 제외) ② `Synth` TTS 완료 이벤트를 출력 장치 지정보다 먼저 등록 ③ `error.log`를 설정 폴더(`Config.DataDirectory`)에 기록 + 1MB 초과 시 `.old`로 한 단계 보관 ④ `Config.Save` 직렬화(lock) ⑤ 알람창 커스텀 초: 직접 입력 후 Enter(확인) 시 입력칸 텍스트를 해석(`ReadTick`). 단위 테스트 49개, ui-test 57/57
+  - 보류(낮음/설계 필요): 같은 이름 사이트로 수정하면 시작 사이트가 이름 기준으로 다른 항목을 가리킬 수 있음(이름 기반 설계), exe 폴더에 오래된 `config.json`이 있고 쓰기 불가이면 대체 폴더로 가지 않음(일시 실패 시 설정이 갈라지는 것을 피하려는 의도), `X/Y` 범위 보정은 `Form1.IsOnScreen`이 처리

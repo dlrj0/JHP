@@ -35,6 +35,26 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void ReadFrom_DropsSitesWithNonHttpUrlsAndFixesMissingScheme()
+    {
+        var c = Config.ReadFrom(Write("""
+            { "sites": [
+                { "name": "ok", "url": "https://example.com/a" },
+                { "name": "file", "url": "file:///C:/Windows/win.ini" },
+                { "name": "js", "url": "javascript:alert(1)" },
+                { "name": "noscheme", "url": "youtube.com" },
+                { "name": "ftp", "url": "ftp://example.com" }
+              ],
+              "defaultSite": "file", "latestUrl": "file:///C:/x" }
+            """));
+        Assert.NotNull(c);
+        Assert.Equal(["ok", "noscheme"], c!.Sites.Select(s => s.Name));
+        Assert.StartsWith("https://youtube.com", c.Sites[1].Url);
+        Assert.Equal("", c.DefaultSite);       // 제외된 사이트를 가리키는 시작 사이트는 비운다
+        Assert.Equal("", c.LatestUrl);         // http/https가 아닌 마지막 주소는 버린다
+    }
+
+    [Fact]
     public void ReadFrom_FixesArrayLengthsAndNulls()
     {
         var c = Config.ReadFrom(Write("""{ "alarmEnabled": [true], "customAlarms": [], "sites": null, "defaultSite": "없는사이트" }"""));

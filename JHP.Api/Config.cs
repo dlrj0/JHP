@@ -42,6 +42,7 @@ public class Config
     // 저장에 처음 실패했을 때 한 번만 발생한다 (UI 스레드가 아닐 수 있음). 인수는 사용자에게 보여 줄 설명.
     public static event Action<string>? SaveFailed;
     private static bool _saveFailureReported;
+    private static readonly object _saveLock = new();
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -161,12 +162,18 @@ public class Config
         Volume = Math.Clamp(Volume, 0, 100);
         Rate = Math.Clamp(Rate, -10, 10);
 
-        Sites = (Sites ?? []).Where(s => s is not null && !string.IsNullOrWhiteSpace(s.Url)).ToList();
-        foreach (var s in Sites) s.Name ??= s.Url;
+        // 주소는 http/https만 허용한다(가져온/손으로 고친 파일의 file:, javascript: 등은 목록에서 제외). 스킴이 없으면 https://를 붙인다.
+        Sites = (Sites ?? []).Where(s => s is not null && Site.TryNormalizeUrl(s.Url, out _)).ToList();
+        foreach (var s in Sites)
+        {
+            Site.TryNormalizeUrl(s.Url, out string normalized);
+            s.Url = s.Url.Contains("://") ? s.Url.Trim() : normalized;   // 이미 올바른 주소는 사용자가 쓴 형태를 유지
+            s.Name ??= s.Url;
+        }
         DefaultSite ??= "";
         if (!Sites.Any(s => s.Name == DefaultSite)) DefaultSite = ""; // 목록에 없는 이름이 남지 않게
         AlarmName ??= "";
-        LatestUrl ??= "";
+        LatestUrl = Site.TryNormalizeUrl(LatestUrl, out string latest) ? latest : "";
         SkippedVersion ??= "";
 
         var enabled = new bool[8];
@@ -196,9 +203,13 @@ public class Config
         try
         {
             // 임시 파일에 쓴 뒤 교체해, 저장 도중 종료되어도 설정 파일이 반쯤 써진 상태로 남지 않게 한다.
-            string tmp = ConfigPath + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(this, JsonOptions));
-            File.Move(tmp, ConfigPath, overwrite: true);
+            // 고정된 임시 파일 이름을 쓰므로 동시에 두 번 저장이 겹치지 않게 직렬화한다.
+            lock (_saveLock)
+            {
+                string tmp = ConfigPath + ".tmp";
+                File.WriteAllText(tmp, JsonSerializer.Serialize(this, JsonOptions));
+                File.Move(tmp, ConfigPath, overwrite: true);
+            }
             return true;
         }
         catch (Exception ex)
@@ -260,4 +271,4 @@ public class Config
         LatestUrl = other.LatestUrl;
         SkippedVersion = other.SkippedVersion;
     }
-}
+}

@@ -61,8 +61,16 @@ static class Program
     {
         try
         {
-            File.AppendAllText(Path.Combine(AppContext.BaseDirectory, "error.log"),
-                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex}\r\n\r\n");
+            // 설정/캐시와 같은 폴더에 기록한다(exe 폴더에 쓸 수 없으면 %LOCALAPPDATA%\JHP).
+            // 같은 오류가 반복돼도 커지지 않게 1MB를 넘으면 이전 로그를 한 단계만 보관한다.
+            string logPath = Path.Combine(JHP.Api.Config.DataDirectory, "error.log");
+            try
+            {
+                if (File.Exists(logPath) && new FileInfo(logPath).Length > 1_000_000)
+                    File.Move(logPath, logPath + ".old", overwrite: true);
+            }
+            catch { }
+            File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex}\r\n\r\n");
         }
         catch { }
 
@@ -73,7 +81,7 @@ static class Program
         try
         {
             MessageBox.Show("예상하지 못한 오류가 발생했습니다.\n" + (ex?.Message ?? "알 수 없는 오류") +
-                "\n\n자세한 내용은 실행 폴더의 error.log에 기록했습니다.", "JHP", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                $"\n\n자세한 내용은 설정 폴더의 error.log에 기록했습니다.\n{JHP.Api.Config.DataDirectory}", "JHP", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         catch { }
     }

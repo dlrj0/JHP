@@ -32,12 +32,13 @@ public class Synth
         try
         {
             _synthesizer = new SpeechSynthesizer();
-            _synthesizer.SetOutputToDefaultAudioDevice();
-            // 새 TTS로 교체되며 취소된 이전 발화의 완료 이벤트는 무시한다 (새 발화가 끝났을 때만 알림)
+            // 새 TTS로 교체되며 취소된 이전 발화의 완료 이벤트는 무시한다 (새 발화가 끝났을 때만 알림).
+            // 출력 장치 지정이 실패해도 완료 이벤트는 받도록 먼저 등록한다.
             _synthesizer.SpeakCompleted += (_, e) =>
             {
                 if (!e.Cancelled) RaiseFinished();
             };
+            _synthesizer.SetOutputToDefaultAudioDevice();
         }
         catch { }
     }
