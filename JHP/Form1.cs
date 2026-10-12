@@ -9,17 +9,12 @@ namespace JHP;
 
 public partial class Form1 : Form
 {
-    private static readonly int[] AlarmSeconds = [7200, 3600, 1800, 1200, 900, 600, 100, 55];
-    // 알람이 울릴 때 TTS로 읽는 이름 (원본 재획플레이어의 항목명)
-    private static readonly string[] AlarmNames = ["재획비", "경쿠", "경뿌/경쿠/유니온", "유니온 버프", "경쿠", "유니온 버프", "메소 회수", "파운틴"];
-
     // 버전의 단일 출처는 JHP.csproj의 <Version>
     private static readonly string CurrentVersion =
         "v" + (typeof(Form1).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0");
 
     private readonly Config _config = Config.Instance;
-    private readonly int[] _remaining = new int[8];
-    private readonly int[] _customRemaining = new int[3];
+    private readonly AlarmScheduler _alarms = new();           // 알람 남은 시간 계산(순수 로직, JHP.Api)
     private bool _timerRunning = false;
 
     // 인라인 편집 대상 추적 ("volume" | "opacity")
@@ -259,8 +254,7 @@ public partial class Form1 : Form
         btnMenu.Click += (_, _) => OpenSiteMenu();
 
         // 알람 타이머 초기화 (시작은 안 함)
-        for (int i = 0; i < 8; i++) _remaining[i] = AlarmSeconds[i];
-        for (int i = 0; i < 3; i++) _customRemaining[i] = _config.CustomAlarms[i].Tick;
+        _alarms.ResetAll(_config.CustomAlarms);
         UpdateNextAlarmLabel();
 
         timer.Tick += Timer_Tick;
@@ -288,8 +282,7 @@ public partial class Form1 : Form
         if (_timerRunning)
         {
             // 시작 시 항상 리셋
-            for (int i = 0; i < 8; i++) _remaining[i] = AlarmSeconds[i];
-            for (int i = 0; i < 3; i++) _customRemaining[i] = _config.CustomAlarms[i].Tick;
+            _alarms.ResetAll(_config.CustomAlarms);
             _lastTickMs = Environment.TickCount64;
             timer.Start();
         }
@@ -489,28 +482,8 @@ public partial class Form1 : Form
         _lastTickMs += steps * 1000L;
 
         // 같은 순간에 여러 알람이 겹치면(예: 2시간 시점에 1시간/30분/... 동시 도달) 목록 위쪽 하나만 울린다.
-        // 모든 알람의 남은 시간은 각자 정상적으로 갱신/리셋한다.
-        string? toFire = null;
-
-        for (int step = 0; step < steps; step++)
-        {
-            for (int i = 0; i < 8; i++)
-            {
-                if (!_config.AlarmEnabled[i]) continue;
-                if (--_remaining[i] > 0) continue;
-                _remaining[i] = AlarmSeconds[i];
-                toFire ??= AlarmNames[i];
-            }
-
-            for (int i = 0; i < 3; i++)
-            {
-                var alarm = _config.CustomAlarms[i];
-                if (!alarm.Enabled || alarm.Tick <= 0) continue;
-                if (--_customRemaining[i] > 0) continue;
-                _customRemaining[i] = alarm.Tick;
-                toFire ??= string.IsNullOrWhiteSpace(alarm.Name) ? "커스텀 알람" : alarm.Name;
-            }
-        }
+        // 모든 알람의 남은 시간은 각자 정상적으로 갱신/리셋한다. (계산은 AlarmScheduler)
+        string? toFire = _alarms.Advance(steps, _config.AlarmEnabled, _config.CustomAlarms);
 
         if (toFire is not null) FireAlarm(toFire);
 
@@ -589,13 +562,7 @@ public partial class Form1 : Form
             return;
         }
 
-        int? min = null;
-        for (int i = 0; i < 8; i++)
-            if (_config.AlarmEnabled[i])
-                min = min is null ? _remaining[i] : Math.Min(min.Value, _remaining[i]);
-        for (int i = 0; i < 3; i++)
-            if (_config.CustomAlarms[i].Enabled && _config.CustomAlarms[i].Tick > 0)
-                min = min is null ? _customRemaining[i] : Math.Min(min.Value, _customRemaining[i]);
+        int? min = _alarms.MinRemaining(_config.AlarmEnabled, _config.CustomAlarms);
 
         SetNextText(min is null ? "--:--" : FormatRemaining(min.Value), Color.FromArgb(110, 220, 140));
         string tip = min is null
@@ -654,17 +621,7 @@ public partial class Form1 : Form
     private void ApplyAlarmSettings()
     {
         // 확인만 눌러도 진행 중인 알람이 처음부터 다시 세어지지 않도록, 설정창을 열 때와 달라진 항목만 리셋한다.
-        for (int i = 0; i < 8; i++)
-        {
-            bool changed = _alarmEnabledSnapshot is null || _alarmEnabledSnapshot[i] != _config.AlarmEnabled[i];
-            if (_config.AlarmEnabled[i] && changed) _remaining[i] = AlarmSeconds[i];
-        }
-        for (int i = 0; i < 3; i++)
-        {
-            var c = _config.CustomAlarms[i];
-            bool changed = _customSnapshot is null || _customSnapshot[i] != (c.Enabled, c.Tick);
-            if (c.Enabled && changed) _customRemaining[i] = c.Tick;
-        }
+        _alarms.ApplyChanges(_alarmEnabledSnapshot, _customSnapshot, _config.AlarmEnabled, _config.CustomAlarms);
 
         sliderVolume.Value = Math.Clamp(_config.Volume, sliderVolume.Minimum, sliderVolume.Maximum);
         lblVolumeValue.Text = $"볼륨 {sliderVolume.Value}";
@@ -957,8 +914,7 @@ public partial class Form1 : Form
         TopMost = _config.TopMost;
         ApplyHotkey();
         Synth.Instance.SetRate(_config.Rate);
-        for (int i = 0; i < 8; i++) _remaining[i] = AlarmSeconds[i];
-        for (int i = 0; i < 3; i++) _customRemaining[i] = _config.CustomAlarms[i].Tick;
+        _alarms.ResetAll(_config.CustomAlarms);
         UpdateNextAlarmLabel();
         _config.Save();
     }
