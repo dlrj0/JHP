@@ -629,6 +629,13 @@ public partial class Form1 : Form
         };
         menu.Items.Add(muteItem);
 
+        var exportItem = new ToolStripMenuItem("설정 내보내기…") { AutoSize = false, Size = new Size(itemWidth, itemHeight) };
+        exportItem.Click += (_, _) => BeginInvoke(ExportSettings);
+        menu.Items.Add(exportItem);
+        var importItem = new ToolStripMenuItem("설정 가져오기…") { AutoSize = false, Size = new Size(itemWidth, itemHeight) };
+        importItem.Click += (_, _) => BeginInvoke(ImportSettings);
+        menu.Items.Add(importItem);
+
         if (_config.Sites.Count > 0)
             menu.Items.Add(new ToolStripSeparator());
 
@@ -669,6 +676,87 @@ public partial class Form1 : Form
 
         menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
         menu.Show(btnMenu, new Point(0, btnMenu.Height));
+    }
+
+    // ===== 설정 내보내기/가져오기 =====
+    // 파일 대화상자를 띄우는 동안 항상 위 상태면 대화상자가 가려질 수 있어 임시로 해제한다 (ShowSiteDialog와 같은 방식).
+    private T WithDialogState<T>(Func<T> show)
+    {
+        bool wasTopMost = TopMost;
+        TopMost = false;
+        _modalDepth++;
+        try { return show(); }
+        finally
+        {
+            _modalDepth--;
+            TopMost = wasTopMost;
+        }
+    }
+
+    private void ExportSettings()
+    {
+        string? path = WithDialogState(() =>
+        {
+            using var dlg = new SaveFileDialog
+            {
+                Title = "설정 내보내기",
+                Filter = "JHP 설정 (*.json)|*.json",
+                FileName = "jhp-config.json",
+                OverwritePrompt = true
+            };
+            return dlg.ShowDialog(this) == DialogResult.OK ? dlg.FileName : null;
+        });
+        if (path is null) return;
+
+        // 현재 창 상태/주소까지 반영해서 내보낸다
+        _config.Opacity = Opacity;
+        _config.TopMost = TopMost;
+        if (webView.CoreWebView2 is not null && JHP.Api.Site.TryNormalizeUrl(webView.CoreWebView2.Source, out string src))
+            _config.LatestUrl = src;
+
+        bool ok = _config.ExportTo(path);
+        MessageBox.Show(this, ok ? "설정을 내보냈습니다." : "설정을 내보내지 못했습니다. 저장 위치를 확인해주세요.",
+            "JHP", MessageBoxButtons.OK, ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+    }
+
+    private void ImportSettings()
+    {
+        string? path = WithDialogState(() =>
+        {
+            using var dlg = new OpenFileDialog
+            {
+                Title = "설정 가져오기",
+                Filter = "JHP 설정 (*.json)|*.json",
+                CheckFileExists = true
+            };
+            return dlg.ShowDialog(this) == DialogResult.OK ? dlg.FileName : null;
+        });
+        if (path is null) return;
+
+        var imported = Config.ReadFrom(path);
+        if (imported is null || imported.Sites.Count == 0)
+        {
+            MessageBox.Show(this, "올바른 JHP 설정 파일이 아닙니다.", "JHP", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        if (MessageBox.Show(this, "현재 설정(사이트 목록, 알람, 볼륨 등)을 가져온 설정으로 바꿉니다. 계속할까요?",
+                "JHP", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+        // 창 위치/크기와 현재 주소는 지금 상태를 유지하고, 나머지를 교체한다
+        imported.X = _config.X; imported.Y = _config.Y;
+        imported.Width = _config.Width; imported.Height = _config.Height;
+        imported.IsMaximize = _config.IsMaximize;
+        imported.LatestUrl = _config.LatestUrl;
+        _config.Replace(imported);
+
+        sliderVolume.Value = Math.Clamp(_config.Volume, sliderVolume.Minimum, sliderVolume.Maximum);
+        sliderOpacity.Value = Math.Clamp((int)Math.Round(_config.Opacity * 100), sliderOpacity.Minimum, sliderOpacity.Maximum);
+        TopMost = _config.TopMost;
+        Synth.Instance.SetRate(_config.Rate);
+        for (int i = 0; i < 8; i++) _remaining[i] = AlarmSeconds[i];
+        for (int i = 0; i < 3; i++) _customRemaining[i] = _config.CustomAlarms[i].Tick;
+        UpdateNextAlarmLabel();
+        _config.Save();
     }
 
     // ===== 사이트 목록 =====

@@ -130,6 +130,28 @@ public class Config
         catch { }
     }
 
+    // 설정을 다른 위치의 파일로 내보낸다. 실패하면 false.
+    public bool ExportTo(string path)
+    {
+        try
+        {
+            File.WriteAllText(path, JsonSerializer.Serialize(this, JsonOptions));
+            return true;
+        }
+        catch { return false; }
+    }
+
+    // 내보낸 설정 파일을 읽어 보정까지 마친 Config를 돌려준다. 읽을 수 없거나 형식이 틀리면 null.
+    public static Config? ReadFrom(string path)
+    {
+        try
+        {
+            var loaded = JsonSerializer.Deserialize<Config>(File.ReadAllText(path), JsonOptions);
+            return loaded?.Normalize();
+        }
+        catch { return null; }
+    }
+
     public void Replace(Config other)
     {
         Width = other.Width;

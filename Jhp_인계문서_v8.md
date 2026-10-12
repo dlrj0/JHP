@@ -324,3 +324,4 @@ timerButton.RightClick  // 우클릭 전용 이벤트
 - [테스트] `tools/ui-test.ps1`에 같은 폴더 두 번째 실행 검사(7b) 추가 → 전체 45/45
 - Form1.cs 전체 코드 리뷰 완료(2026-10-12): 위 항목 외 결함 없음
 - [메뉴 검사 실행] 규칙 정정 후 -IncludeMenu로 전체 실행: **58/58 통과**(▼ 메뉴 항목 전부 + '알람 울릴 때 영상 음소거' 항목 존재, 사이트 추가창 열림). 사이트 추가창 내부 검사는 UIA 시간 초과로 SKIP(기존과 동일). 실행 후 남은 JHP 프로세스 없음.
+- [설정 내보내기/가져오기] ▼ 메뉴 항목 2개 추가 (`Form1.cs` ExportSettings/ImportSettings, `Config.ExportTo/ReadFrom`). 되돌리기: `git revert` 해당 커밋. 파일 대화상자는 실제 입력이 필요해 자동 검증은 메뉴 항목 존재까지만 함 → 사용자 육안 확인 권장
