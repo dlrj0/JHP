@@ -21,19 +21,21 @@ public static class UserScripts
             try { if (localStorage.getItem(KEY)) return; } catch (e) { return; }
             const labels = ['Auto Play', 'Auto Next', 'Auto Skip Intro & Outro'];
             const isOn = b => /(^|\s)text-primary(\s|$)/.test(b.className);
+            // 서버에서 그려진 버튼은 페이지 스크립트가 준비되기 전에는 눌러도 반응이 없으므로,
+            // 토글이 실제로 켜진 것을 확인한 뒤에만 완료로 표시하고 그때까지 주기적으로 다시 시도한다.
             let tries = 0;
-            const apply = () => {
+            const timer = setInterval(() => {
+                if (++tries > 90) { clearInterval(timer); return; }
                 const btns = labels.map(l => document.querySelector('button[aria-label="' + l + '"]'));
-                if (btns.some(b => !b)) return false;
-                btns.forEach(b => { if (!isOn(b)) b.click(); });
-                try { localStorage.setItem(KEY, '1'); } catch (e) { }
-                return true;
-            };
-            if (apply()) return;
-            const obs = new MutationObserver(() => {
-                if (apply() || ++tries > 200) obs.disconnect();
-            });
-            obs.observe(document.documentElement, { childList: true, subtree: true });
+                if (btns.some(b => !b)) return;
+                const off = btns.filter(b => !isOn(b));
+                if (off.length === 0) {
+                    try { localStorage.setItem(KEY, '1'); } catch (e) { }
+                    clearInterval(timer);
+                    return;
+                }
+                off.forEach(b => b.click());
+            }, 1000);
         })();
         """;
 
