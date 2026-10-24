@@ -22,7 +22,6 @@ namespace JHP
 
         private Panel pnlTitleBar;
         private Button btnMenu;
-        private Label lblTitle;
         private TimerButton timerButton;
         private Label lblVolumeValue;
         private Label lblOpacityValue;
@@ -48,7 +47,6 @@ namespace JHP
 
             pnlTitleBar = new Panel();
             btnMenu = new Button();
-            lblTitle = new Label();
             timerButton = new TimerButton();
             lblVolumeValue = new Label();
             lblOpacityValue = new Label();
@@ -68,12 +66,6 @@ namespace JHP
             pnlTitleBar.Height = 36;
             pnlTitleBar.BackColor = Color.FromArgb(28, 28, 28);
 
-            lblTitle.AutoSize = true;
-            lblTitle.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
-            lblTitle.ForeColor = Color.White;
-            lblTitle.Location = new Point(48, 9);
-            lblTitle.Text = "JHP";
-
             // V버튼: 타이틀바 맨 왼쪽 — 사이트 목록 + 사이트 추가 + 항상위/테두리숨김을 드롭다운으로 흡수
             // (구버전의 pnlMenuBar/menuStrip, pnlSidebar/siteList 대체)
             btnMenu.Location = new Point(3, 4);
@@ -92,7 +84,7 @@ namespace JHP
 
             // timerButton: lblNextAlarm + btnAlarmSettings 대체
             // 좌클릭=타이머 시작/정지, 우클릭=알람설정
-            timerButton.Location = new Point(90, 3);
+            timerButton.Location = new Point(38, 3);
             timerButton.Size = new Size(30, 30);
 
             lblVolumeValue.AutoSize = true;
@@ -134,7 +126,6 @@ namespace JHP
             btnClose.Location = new Point(954, 3);
             btnClose.Type = ControlButton.ButtonType.Close;
 
-            pnlTitleBar.Controls.Add(lblTitle);
             pnlTitleBar.Controls.Add(btnMenu);
             pnlTitleBar.Controls.Add(timerButton);
             pnlTitleBar.Controls.Add(lblVolumeValue);

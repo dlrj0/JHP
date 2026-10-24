@@ -190,16 +190,11 @@ public partial class Form1 : Form
     {
         // 타이틀바 드래그 이동 (timerButton 제외 — 버튼 클릭과 충돌)
         pnlTitleBar.MouseDown += TitleBar_MouseDown;
-        lblTitle.MouseDown += TitleBar_MouseDown;
         pnlTitleBar.MouseMove += TitleBar_MouseMove;
         // 타이틀바 빈 영역 더블클릭: 최대화 / 이전 크기 (가장자리 리사이즈 영역은 제외)
         pnlTitleBar.MouseDoubleClick += (_, e) =>
         {
             if (e.Button == MouseButtons.Left && TitleBarEdgeHit(e.Location) == HTCLIENT) btnMaximize.PerformClick();
-        };
-        lblTitle.MouseDoubleClick += (_, e) =>
-        {
-            if (e.Button == MouseButtons.Left) btnMaximize.PerformClick();
         };
 
         // 가장자리 리사이즈 핸들 (webView가 가장자리를 덮고 있어 WM_NCHITTEST 방식이 동작하지 않음)
@@ -243,7 +238,7 @@ public partial class Form1 : Form
         toolTip.SetToolTip(btnClose, "닫기");
         toolTip.SetToolTip(sliderVolume, "볼륨");
         toolTip.SetToolTip(sliderOpacity, "투명도");
-        toolTip.SetToolTip(lblVolumeValue, "숫자: 클릭하여 직접 입력 / 이름: 클릭하면 100, 다시 클릭하면 이전 값");
+        toolTip.SetToolTip(lblVolumeValue, "숫자: 클릭하여 직접 입력 / 이름: 클릭하면 0(음소거), 다시 클릭하면 이전 값");
         toolTip.SetToolTip(lblOpacityValue, "숫자: 클릭하여 직접 입력 / 이름: 클릭하면 100, 다시 클릭하면 이전 값");
 
         // 볼륨
@@ -341,7 +336,7 @@ public partial class Form1 : Form
     }
 
     // ===== 볼륨/투명도 라벨 클릭 =====
-    // 라벨은 "볼륨 100"처럼 이름 + 숫자다. 숫자 부분을 누르면 직접 입력, 이름 부분을 누르면 100 ↔ 이전 값으로 전환한다.
+    // 라벨은 "볼륨 100"처럼 이름 + 숫자다. 숫자 부분을 누르면 직접 입력, 이름 부분을 누르면 볼륨은 0, 투명도는 100 ↔ 이전 값으로 전환한다.
     private int? _volumeRestore;    // 이름을 눌러 100으로 올리기 전의 값
     private int? _opacityRestore;
 
@@ -358,18 +353,18 @@ public partial class Form1 : Form
         if (e.Button != MouseButtons.Left) return;
         if (e.X >= NumberPartStart(lbl)) { BeginInlineEdit(target); return; }
 
-        if (target == "volume") ToggleFull(sliderVolume, ref _volumeRestore);
-        else ToggleFull(sliderOpacity, ref _opacityRestore);
+        if (target == "volume") ToggleTo(sliderVolume, sliderVolume.Minimum, ref _volumeRestore);   // 볼륨: 이름을 누르면 0(음소거)
+        else ToggleTo(sliderOpacity, sliderOpacity.Maximum, ref _opacityRestore);                    // 투명도: 이름을 누르면 100
         FocusWeb();   // 슬라이더 조작과 같이 화살표 키가 영상 탐색으로 가게
     }
 
-    // 최댓값(100)이 아니면 현재 값을 기억하고 100으로, 기억해 둔 값이 있는 상태에서 100이면 원래 값으로 되돌린다.
-    private static void ToggleFull(NSlider slider, ref int? restore)
+    // 목표 값(볼륨 0, 투명도 100)이 아니면 현재 값을 기억하고 목표 값으로, 이미 목표 값이고 기억해 둔 값이 있으면 원래 값으로 되돌린다.
+    private static void ToggleTo(NSlider slider, int target, ref int? restore)
     {
-        if (slider.Value != slider.Maximum)
+        if (slider.Value != target)
         {
             restore = slider.Value;
-            slider.Value = slider.Maximum;
+            slider.Value = target;
         }
         else if (restore is int previous)
         {
@@ -395,6 +390,7 @@ public partial class Form1 : Form
         tbInlineEdit.Width = TextRenderer.MeasureText(widest, tbInlineEdit.Font, Size.Empty, TextFormatFlags.NoPadding).Width + Px(14);
         tbInlineEdit.Location = new Point(lbl.Left + numberLeft, (pnlTitleBar.Height - tbInlineEdit.Height) / 2);
         tbInlineEdit.Visible = true;
+        tbInlineEdit.BringToFront();   // 라벨이 입력 칸 위에 겹쳐 그려져 숫자가 두 번 보이지 않게 한다
         if (!Program.TestOffscreen) tbInlineEdit.Focus();   // 자동 테스트: SetFocus는 창을 활성화할 수 있어 건너뜀(입력은 메시지로 전달)
         tbInlineEdit.SelectAll();
     }
@@ -1357,7 +1353,6 @@ public partial class Form1 : Form
         // 좌측 요소 세로 가운데 정렬
         btnMenu.Top = (h - btnMenu.Height) / 2;
         timerButton.Top = (h - timerButton.Height) / 2;
-        lblTitle.Top = (h - lblTitle.Height) / 2;
 
         // 타이머 버튼 오른쪽: 다음 알람 남은 시간(h:mm:ss까지 들어가는 고정 폭)
         int nextW = TextRenderer.MeasureText("0:00:00", lblNext.Font).Width + Px(4);

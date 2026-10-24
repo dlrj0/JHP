@@ -24,6 +24,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\ui-test.ps1 -OutDir <�
 - 단위 테스트: `dotnet test JHP.Tests/JHP.Tests.csproj` (57개; 순수 로직: AlarmScheduler/Config/Site·SiteListOps/UpdateChecker/DarkMessageBox)
 - 사용자가 쓰는 JHP가 실행 중이면 `JHP/bin`의 DLL이 잠겨 빌드가 실패합니다. 이때는 `-p:OutDir=<다른 폴더>\`로 빌드하세요.
 
+- 사용자가 직접 실행할 때: 저장소 루트의 `run-jhp.bat`(게시 후 실행, `fast` 인자는 게시 생략). 게시 폴더는 `JHP/bin/publish/win-x64`. `.bat`은 ASCII만 쓴다.
+
 ## 반드시 지킬 것
 1. **사용자의 PC 사용을 방해하지 않고, 작업이 끝나면 창을 화면에서 치웁니다**(최소화/화면 밖/내가 띄운 프로세스 종료). 작업 중 창이 잠깐 보이는 것은 허용. 실제 마우스 이동/클릭, 키 입력, 포커스 이동, `taskkill /IM JHP.exe`, 사용자 화면을 덮는 최대화 금지. 종료는 자기가 띄운 PID만.
 2. **커밋은 변경 단위로, 푸시는 조건부로만** 합니다. 사용자가 "진짜 문제가 없다면 푸시까지 해도 된다"고 허용했으므로(2026-10-12), 빌드 0 오류 + `tools/ui-test.ps1` 전체 통과 + 단위 테스트 통과 + 알려진 회귀 없음일 때만 `git push origin test`(test 브랜치만). `main` 병합, Release/태그 생성·푸시, 강제 푸시는 사용자가 요청할 때만 합니다.

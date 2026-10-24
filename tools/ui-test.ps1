@@ -46,6 +46,10 @@ public static class FocusWatch {
   // 사용자가 다른 창을 쓰는 것은 기록하지 않는다(포그라운드가 테스트 pid일 때만). 읽기만 하며 입력/포커스에 영향을 주지 않는다.
   [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] static extern int GetSystemMetrics(int n);
+  [StructLayout(LayoutKind.Sequential)] struct LII { public uint cbSize; public uint dwTime; }
+  [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LII p);
+  // 마지막 사용자 입력(키보드/마우스)으로부터 지난 시간(ms). 포그라운드가 바뀐 순간 직전에 입력이 있었다면 사용자가 직접 바꾼 것일 수 있다(값만 읽음).
+  static long IdleMs() { var l = new LII(); l.cbSize = (uint)Marshal.SizeOf(typeof(LII)); if (!GetLastInputInfo(ref l)) return -1; return (uint)Environment.TickCount - l.dwTime; }
   static readonly HashSet<uint> pids = new HashSet<uint>();
   static readonly HashSet<string> seen = new HashSet<string>();
   public static readonly List<string> Events = new List<string>();
@@ -61,7 +65,7 @@ public static class FocusWatch {
         try {
           uint[] ps; lock (pids) { ps = new uint[pids.Count]; pids.CopyTo(ps); }
           var fg = GetForegroundWindow(); uint fpid; Win.GetWindowThreadProcessId(fg, out fpid);
-          foreach (var p in ps) if (p == fpid) Log("fg" + fg, "포그라운드가 됨: '" + Title(fg) + "' (pid " + p + ")");
+          foreach (var p in ps) if (p == fpid) Log("fg" + fg, "포그라운드가 됨: '" + Title(fg) + "' (pid " + p + ", 사용자 입력 후 " + IdleMs() + "ms)");
           int vl = GetSystemMetrics(76), vt = GetSystemMetrics(77), vr = vl + GetSystemMetrics(78), vb = vt + GetSystemMetrics(79);
           foreach (var p in ps) foreach (var h in Win.TopWindows(p)) {
             Win.RECT r; Win.GetWindowRect(h, out r);
@@ -342,6 +346,7 @@ try {
             $seq += (Get-LabelText $labelPattern)
         }
         $script:inlineSeq = $seq
+        Save-Window $main ('03a-inline-' + $prefix.Trim()) | Out-Null   # 입력 칸이 열린 상태(라벨과 겹쳐 보이지 않는지 육안 확인용)
         # Esc (WM_KEYDOWN VK_ESCAPE)
         [Win]::SendMessage($edit.Hwnd, 0x0100, [IntPtr]0x1B, [IntPtr]::Zero) | Out-Null
         Start-Sleep -Milliseconds 300
@@ -358,19 +363,19 @@ try {
         # 5는 최솟값(30) 미만이므로 입력 즉시 30으로 보정되어 반영되고, 50이 되면 50이 된다 (Form1.ApplyInlineEditLive 주석)
         Check 'inline[투명도 ]: 입력 즉시 반영 (5 → 투명도 30%, 50 → 투명도 50%)' ($script:inlineSeq[0] -eq '투명도 30%' -and $script:inlineSeq[1] -eq '투명도 50%') ("seq=" + ($script:inlineSeq -join ' | '))
     }
-    # 이름 부분("볼륨"/"투명도") 클릭: 100으로, 다시 클릭하면 이전 값으로 되돌린다
+    # 이름 부분("볼륨"/"투명도") 클릭: 볼륨은 0, 투명도는 100으로, 다시 클릭하면 이전 값으로 되돌린다
     Run-Safe 'label-toggle' {
       try {
         $tp = Get-TitleParts
-        foreach ($c in @(@('볼륨*', $tp.VolLabel, $tp.VolSlider, '볼륨 ', ''), @('투명도*', $tp.OpaLabel, $tp.OpaSlider, '투명도 ', '%'))) {
-            $pat, $lblEl, $sl, $pre, $suf = $c
+        foreach ($c in @(@('볼륨*', $tp.VolLabel, $tp.VolSlider, '볼륨 ', '', 0), @('투명도*', $tp.OpaLabel, $tp.OpaSlider, '투명도 ', '%', 100))) {
+            $pat, $lblEl, $sl, $pre, $suf, $goal = $c
             Send-Mouse $sl 'ldown' 0.5 0.5; Send-Mouse $sl 'lup' 0.5 0.5   # 중간 값으로 만든 뒤
             Start-Sleep -Milliseconds 150
             $mid = Get-LabelText $pat
             Send-Mouse $lblEl 'ldown' 0.08 0.5; Send-Mouse $lblEl 'lup' 0.08 0.5
             Start-Sleep -Milliseconds 200
             $t1 = Get-LabelText $pat
-            Check "label-toggle[$pre]: 이름 클릭 → 100" ($t1 -eq "${pre}100$suf") "label='$t1' (before='$mid')"
+            Check "label-toggle[$pre]: 이름 클릭 → $goal" ($t1 -eq "${pre}${goal}$suf") "label='$t1' (before='$mid')"
             Send-Mouse $lblEl 'ldown' 0.08 0.5; Send-Mouse $lblEl 'lup' 0.08 0.5
             Start-Sleep -Milliseconds 200
             $t2 = Get-LabelText $pat
