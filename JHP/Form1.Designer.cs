@@ -112,9 +112,9 @@ namespace JHP
             // 인라인 직접입력 TextBox (기본 숨김, 볼륨/투명도 숫자 클릭 시 표시)
             tbInlineEdit.Visible = false;
             tbInlineEdit.Size = new Size(60, 20);
-            tbInlineEdit.BackColor = Color.FromArgb(245, 245, 245);   // 일반 텍스트 상자처럼 밝게 보이게
-            tbInlineEdit.ForeColor = Color.Black;
-            tbInlineEdit.BorderStyle = BorderStyle.FixedSingle;
+            tbInlineEdit.BackColor = Color.FromArgb(28, 28, 28);   // 타이틀바와 같은 배경·테두리 없음: 라벨의 숫자가 그 자리에서 바로 수정되는 것처럼 보이게
+            tbInlineEdit.ForeColor = Color.White;
+            tbInlineEdit.BorderStyle = BorderStyle.None;
 
             // 우측 버튼 위치는 LayoutTitleBar()에서 계산 (Anchor는 패널 기본 폭 200 기준으로 계산되어 창 밖으로 밀려남)
             btnMinimize.Location = new Point(862, 3);

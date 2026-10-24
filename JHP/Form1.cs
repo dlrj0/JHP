@@ -243,10 +243,10 @@ public partial class Form1 : Form
 
         // 볼륨
         sliderVolume.Value = Math.Clamp(_config.Volume, sliderVolume.Minimum, sliderVolume.Maximum);
-        lblVolumeValue.Text = $"볼륨 {sliderVolume.Value}";
+        UpdateValueLabels();
         sliderVolume.ValueChanged += (_, _) =>
         {
-            lblVolumeValue.Text = $"볼륨 {sliderVolume.Value}";
+            UpdateValueLabels();
             _config.Volume = sliderVolume.Value;
             Synth.Instance.SetVolume(sliderVolume.Value);
             ScheduleSave();
@@ -258,10 +258,10 @@ public partial class Form1 : Form
         // 투명도 (30~100%)
         sliderOpacity.Value = Math.Clamp((int)Math.Round(_config.Opacity * 100), sliderOpacity.Minimum, sliderOpacity.Maximum);
         Opacity = sliderOpacity.Value / 100.0;
-        lblOpacityValue.Text = $"투명도 {sliderOpacity.Value}%";
+        UpdateValueLabels();
         sliderOpacity.ValueChanged += (_, _) =>
         {
-            lblOpacityValue.Text = $"투명도 {sliderOpacity.Value}%";
+            UpdateValueLabels();
             Opacity = sliderOpacity.Value / 100.0;
             _config.Opacity = Opacity;
             ScheduleSave();
@@ -340,6 +340,17 @@ public partial class Form1 : Form
     private int? _volumeRestore;    // 이름을 눌러 100으로 올리기 전의 값
     private int? _opacityRestore;
 
+    // 볼륨/투명도 라벨 글자. 숫자를 편집하는 동안에는 이름만 그려서(입력 칸이 숫자 자리를 차지) 숫자가 겹쳐 보이지 않게 한다.
+    // 접근성 이름(AccessibleName, UI Automation의 Name)은 항상 "볼륨 50"처럼 전체 값을 유지한다.
+    private void UpdateValueLabels()
+    {
+        string vol = $"볼륨 {sliderVolume.Value}", opa = $"투명도 {sliderOpacity.Value}%";
+        lblVolumeValue.AccessibleName = vol;
+        lblOpacityValue.AccessibleName = opa;
+        lblVolumeValue.Text = _inlineEditTarget == "volume" ? "볼륨 " : vol;
+        lblOpacityValue.Text = _inlineEditTarget == "opacity" ? "투명도 " : opa;
+    }
+
     // 라벨 안에서 숫자가 시작하는 x 좌표(이름 + 공백의 폭)
     private static int NumberPartStart(Label lbl)
     {
@@ -384,13 +395,15 @@ public partial class Form1 : Form
 
         _inlineEditOriginal = value;
         tbInlineEdit.Text = value.ToString();
-        // 이름("볼륨", "투명도")은 그대로 보이게 두고 숫자 자리에만 입력 칸을 겹친다. 라벨의 숫자(와 %)가 비쳐 보이지 않을 폭으로 잡는다.
+        // 이름("볼륨", "투명도")은 라벨에 남기고, 숫자 자리에는 같은 글꼴의 입력 칸을 둔다(라벨은 이름만 그려서 겹치지 않는다).
+        tbInlineEdit.Font = lbl.Font;
         string widest = target == "volume" ? "100" : "100%";
-        int numberLeft = Math.Max(0, NumberPartStart(lbl) - Px(3));
-        tbInlineEdit.Width = TextRenderer.MeasureText(widest, tbInlineEdit.Font, Size.Empty, TextFormatFlags.NoPadding).Width + Px(14);
-        tbInlineEdit.Location = new Point(lbl.Left + numberLeft, (pnlTitleBar.Height - tbInlineEdit.Height) / 2);
+        int numberLeft = NumberPartStart(lbl);
+        tbInlineEdit.Width = TextRenderer.MeasureText(widest, tbInlineEdit.Font, Size.Empty, TextFormatFlags.NoPadding).Width + Px(14);   // 테두리 없는 TextBox도 안쪽 여백이 있어 글자가 잘리지 않게 넉넉히
+        tbInlineEdit.Location = new Point(lbl.Left + numberLeft + Px(3), lbl.Top + (lbl.Height - tbInlineEdit.Height) / 2);
         tbInlineEdit.Visible = true;
-        tbInlineEdit.BringToFront();   // 라벨이 입력 칸 위에 겹쳐 그려져 숫자가 두 번 보이지 않게 한다
+        tbInlineEdit.BringToFront();   // 라벨의 남은 폭이 입력 칸의 앞쪽을 가리지 않게
+        UpdateValueLabels();   // 라벨에서 숫자를 뺀다(AccessibleName은 유지)
         if (!Program.TestOffscreen) tbInlineEdit.Focus();   // 자동 테스트: SetFocus는 창을 활성화할 수 있어 건너뜀(입력은 메시지로 전달)
         tbInlineEdit.SelectAll();
     }
@@ -428,6 +441,7 @@ public partial class Form1 : Form
         tbInlineEdit.Visible = false;
         lblVolumeValue.Visible = true;
         lblOpacityValue.Visible = true;
+        UpdateValueLabels();
     }
 
     private void InlineEdit_KeyDown(object? sender, KeyEventArgs e)
@@ -754,7 +768,7 @@ public partial class Form1 : Form
         _alarms.ApplyChanges(_alarmEnabledSnapshot, _customSnapshot, _config.AlarmEnabled, _config.CustomAlarms);
 
         sliderVolume.Value = Math.Clamp(_config.Volume, sliderVolume.Minimum, sliderVolume.Maximum);
-        lblVolumeValue.Text = $"볼륨 {sliderVolume.Value}";
+        UpdateValueLabels();
         UpdateNextAlarmLabel();
     }
 
