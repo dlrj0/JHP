@@ -183,7 +183,7 @@ JSON, camelCase. 파일이 없으면 기본값 + 기본 사이트 7개.
 - **방해 최소화**: 알람은 소리/TTS만. 타이머 정지 상태에서는 어떤 알람도 울리지 않음.
 - **저장 안정성**: 설정 저장 실패(권한 등)는 앱 동작에 영향 없이 첫 1회만 타이틀바 아래 툴팁으로 알리고, 설정을 읽지 못한 실행에서는 기존 파일을 덮어쓰지 않음.
 - **배율**: `AutoScaleMode.Dpi`(기준 96dpi). 코드의 모든 px 상수는 `DeviceDpi / 96f`로 환산.
-- **배포**: 자체 포함(self-contained) win-x64, zip 안에 `JHP.exe`, `alarm/`(mp3를 사용자가 추가). `cache/`는 첫 실행 시 생성(WebView2 사용자 데이터).
+- **배포**: framework-dependent win-x64(실행 PC에 .NET 10 Desktop Runtime 필요, 없으면 .NET이 설치 안내를 띄움), zip 안에 `JHP.exe`, `alarm/`(mp3를 사용자가 추가). `cache/`는 첫 실행 시 생성(WebView2 사용자 데이터).
 - **보안/고지**: 넥슨 공식 프로그램이 아님. 서명되지 않은 exe라 SmartScreen 경고가 뜰 수 있음.
 - **원본 안내와의 차이**: 원본은 Windows 7 TTS 미지원을 안내했으나 본 프로젝트는 Windows 10/11만 대상.
 

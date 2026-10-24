@@ -20,7 +20,7 @@
 1. 사용자가 원본 프로그램(`C:\Users\wjgus\Desktop\JHP (2)\JHP.exe`, 2024-06-28 버전)과 내 프로그램을 나란히 실행해 두고 개선점을 찾는 중이었음(재부팅으로 두 창은 종료됨). 개선점을 알려 주면 이어서 작업.
 2. **브라우저 기록 삭제의 실제 삭제 동작은 미확인**(메뉴 팝업 테스트 `-IncludeMenu`는 사용 중인 화면에 뜨므로 건너뜀). 사용자가 한 번 눌러 보고 "삭제했습니다" 메시지가 뜨는지 확인 필요.
 3. 넷플릭스 건너뛰기/다음 화가 JHP 안에서 실제로 동작하는지 사용자 확인(5장).
-4. 정리 후보 중 보류한 것: 배포 용량(self-contained 약 122MB — framework-dependent로 바꾸면 .NET 10 설치 필요, **사용자 결정 필요**), `Form1.cs`(약 1400줄) 분리(이득 작음, 회귀 위험).
+4. 정리 후보 중 보류한 것: (배포 용량은 해결: 2026-10-24 framework-dependent로 변경, 약 4MB. 런타임 없는 PC에서 설치 안내 창이 뜨는 동작은 미확인) `Form1.cs`(약 1400줄) 분리(이득 작음, 회귀 위험).
 5. 제안으로 남겨 둔 것: 볼륨 이름 클릭을 100 대신 음소거 토글로 바꿀지, 창 가장자리 두께(현재 2)를 더 줄일지.
 
 **작업 팁 (이번에 쓴 방법)**
@@ -37,7 +37,7 @@
 | 솔루션 | `JHP.slnx` — `JHP`(UI) / `JHP.Api`(로직) / `JHP.Asset`(OTT 스크립트) / `JHP.Controls`(커스텀 컨트롤) / `JHP.Tests`(xunit) |
 | 경로 / 원격 | `C:\Users\wjgus\source\repos\dlrj0\JHP`, https://github.com/dlrj0/JHP — 작업 브랜치 `test`, 배포 브랜치 `main` |
 | 버전 | `JHP/JHP.csproj`의 `<Version>1.1.0</Version>`이 단일 출처. Release 미생성 |
-| 게시 | `JHP/Properties/PublishProfiles/win-x64.pubxml` (self-contained). 결과물은 저장소에 넣지 않음 |
+| 게시 | `JHP/Properties/PublishProfiles/win-x64.pubxml` (framework-dependent, .NET 10 Desktop Runtime x64 필요). 결과물은 저장소에 넣지 않음 |
 
 주요 파일: `Form1.cs`(타이머·메뉴·WebView·창 동작), `AlarmForm.cs`(알람 설정), `SiteForm.cs`, `Program.cs`(단일 인스턴스·오류 로그),
 `Api/Config.cs`(설정·정규화·내보내기), `Api/AlarmScheduler.cs`(알람 계산, 단위 테스트됨), `Api/Synth.cs`(mp3/TTS), `Api/UpdateChecker.cs`, `Api/DarkMessageBox.cs`, `Asset/UserScripts.cs`.
