@@ -449,5 +449,8 @@ alarm/*.mp3
 .vs/
 !JHP/Properties/PublishProfiles/*.pubxml
 
+# run-jhp.bat이 만드는 게시 결과(실행 중 생기는 cache/config.json 포함)
+/app/
+
 # Playwright MCP 작업 폴더
 .playwright-mcp/

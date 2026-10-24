@@ -5,7 +5,7 @@ rem   run-jhp.bat fast   skip publishing, just start the last published build
 rem Requires the .NET 10 SDK to publish, or the .NET 10 Desktop Runtime (x64) to run a published build.
 setlocal
 set "ROOT=%~dp0"
-set "EXE=%ROOT%JHP\bin\publish\win-x64\JHP.exe"
+set "EXE=%ROOT%app\JHP.exe"
 
 if /i "%~1"=="fast" goto :start
 
