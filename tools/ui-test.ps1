@@ -26,6 +26,7 @@ public static class Win {
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode, EntryPoint="SendMessageW")] public static extern IntPtr SendMessageStr(IntPtr h, uint msg, IntPtr w, string l);
   [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
@@ -39,6 +40,41 @@ public static class Win {
     EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); if (p == pid && IsWindowVisible(h)) list.Add(h); return true; }, IntPtr.Zero);
     return list;
   }
+}
+public static class FocusWatch {
+  // 테스트가 띄운 JHP 프로세스(pid)가 (1) 포그라운드 창이 되거나 (2) 가상 화면 안에 보이는 창을 만들면 기록한다.
+  // 사용자가 다른 창을 쓰는 것은 기록하지 않는다(포그라운드가 테스트 pid일 때만). 읽기만 하며 입력/포커스에 영향을 주지 않는다.
+  [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] static extern int GetSystemMetrics(int n);
+  static readonly HashSet<uint> pids = new HashSet<uint>();
+  static readonly HashSet<string> seen = new HashSet<string>();
+  public static readonly List<string> Events = new List<string>();
+  static System.Threading.Thread t; static volatile bool stop;
+  public static void Add(uint pid) { lock (pids) pids.Add(pid); }
+  static readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
+  static void Log(string key, string text) { lock (Events) { if (seen.Add(key)) Events.Add((clock.ElapsedMilliseconds / 1000) + "s " + text); } }
+  static string Title(IntPtr h) { var sb = new StringBuilder(256); Win.GetWindowText(h, sb, 256); return sb.ToString(); }
+  public static void Start() {
+    stop = false;
+    t = new System.Threading.Thread(() => {
+      while (!stop) {
+        try {
+          uint[] ps; lock (pids) { ps = new uint[pids.Count]; pids.CopyTo(ps); }
+          var fg = GetForegroundWindow(); uint fpid; Win.GetWindowThreadProcessId(fg, out fpid);
+          foreach (var p in ps) if (p == fpid) Log("fg" + fg, "포그라운드가 됨: '" + Title(fg) + "' (pid " + p + ")");
+          int vl = GetSystemMetrics(76), vt = GetSystemMetrics(77), vr = vl + GetSystemMetrics(78), vb = vt + GetSystemMetrics(79);
+          foreach (var p in ps) foreach (var h in Win.TopWindows(p)) {
+            Win.RECT r; Win.GetWindowRect(h, out r);
+            if (r.R > vl && r.L < vr && r.B > vt && r.T < vb && r.R > r.L && r.B > r.T)
+              Log("on" + h, "화면 안에 보임(pid " + p + "): '" + Title(h) + "' L=" + r.L + " T=" + r.T + " R=" + r.R + " B=" + r.B);
+          }
+        } catch { }
+        System.Threading.Thread.Sleep(40);
+      }
+    });
+    t.IsBackground = true; t.Start();
+  }
+  public static void Stop() { stop = true; if (t != null) t.Join(500); }
 }
 "@
 [Win]::SetProcessDPIAware() | Out-Null
@@ -66,6 +102,7 @@ Remove-Item (Join-Path $app 'config.json') -ErrorAction SilentlyContinue   # 첫
 # 앱이 처음부터 화면 밖(-20000,0)에 뜨도록 한다 (실행 직후 사용자의 화면에 잠깐 보이는 것을 막음)
 if (-not $KeepOnScreen) { $env:JHP_OFFSCREEN = '1' }
 $proc = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
+[FocusWatch]::Add([uint32]$proc.Id); [FocusWatch]::Start()   # 포커스/화면 노출 감시 시작 (결과는 맨 끝 'focus:' 검사)
 Remove-Item Env:\JHP_OFFSCREEN -ErrorAction SilentlyContinue
 $main = [IntPtr]::Zero
 for ($i = 0; $i -lt 60; $i++) {
@@ -127,7 +164,14 @@ function Invoke-ElAsync($el) {
     $null = $ps.BeginInvoke()
     Start-Sleep -Milliseconds 700
 }
-function Invoke-El($el) { $el.El.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); Start-Sleep -Milliseconds 500 }
+function Invoke-El($el) {
+    # UIA Invoke/Toggle는 WinForms가 컨트롤 선택(SetFocus)을 하면서 창을 활성화(포그라운드 이동)할 수 있다 → 포커스를 건드리지 않는 메시지로 누른다.
+    #  - 네이티브 BUTTON 클래스(체크박스/확인/취소 등): BM_CLICK, 그 외 직접 그린 컨트롤: WM_LBUTTONDOWN/UP 메시지(실제 커서는 움직이지 않음)
+    if ($el.Hwnd -ne [IntPtr]::Zero -and $el.Class -like '*BUTTON*') { [Win]::SendMessage($el.Hwnd, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null }
+    elseif ($el.Hwnd -ne [IntPtr]::Zero) { Send-Mouse $el 'ldown'; Send-Mouse $el 'lup' }
+    else { $el.El.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }
+    Start-Sleep -Milliseconds 500
+}
 function Px($bmp, [int]$x, [int]$y) { $c = $bmp.GetPixel($x, $y); "$($c.R),$($c.G),$($c.B)" }
 function Find-ProcWindow([string]$title, [int]$timeoutMs = 4000) {
     $sw = [Diagnostics.Stopwatch]::StartNew()
@@ -400,13 +444,13 @@ try {
         }
     }
     function Set-Toggle($el) {
-        try { $el.El.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle() }
+        try { [Win]::SendMessage($el.Hwnd, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null }   # BM_CLICK (UIA Toggle은 창을 활성화한다)
         catch { throw "Toggle 실패 ($($el.Type) '$($el.Name)'): $($_.Exception.Message)" }
         Start-Sleep -Milliseconds 150
     }
     function Get-Toggle($el) { $el.El.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Current.ToggleState }
     function Set-EditValue($el, [string]$v) {
-        try { $el.El.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($v) }
+        try { [Win]::SendMessageStr($el.Hwnd, 0x000C, [IntPtr]::Zero, $v) | Out-Null }   # WM_SETTEXT (UIA SetValue는 창을 활성화한다)
         catch { throw "SetValue 실패 ($($el.Type) '$($el.Name)' $($el.Class)): $($_.Exception.Message)" }
         Start-Sleep -Milliseconds 150
     }
@@ -604,6 +648,7 @@ try {
     # 두 번째 인스턴스는 창을 띄우지 않고 곧 종료해야 하며, 기존 인스턴스는 계속 살아 있어야 한다.
     $env:JHP_OFFSCREEN = '1'
     $dup = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
+    [FocusWatch]::Add([uint32]$dup.Id)
     Remove-Item Env:\JHP_OFFSCREEN -ErrorAction SilentlyContinue
     $dupExited = $dup.WaitForExit(8000)
     if (-not $dupExited) { try { $dup.Kill() } catch { } }
@@ -638,6 +683,7 @@ try {
         Set-Content -LiteralPath $cfgFile -Value ($txt -replace '"isHideWindowBorderOnFocusOut":\s*false', '"isHideWindowBorderOnFocusOut": true') -Encoding UTF8
         if (-not $KeepOnScreen) { $env:JHP_OFFSCREEN = '1' }
         $p3 = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
+    [FocusWatch]::Add([uint32]$p3.Id)
         Remove-Item Env:\JHP_OFFSCREEN -ErrorAction SilentlyContinue
         try {
             $m3 = [IntPtr]::Zero
@@ -703,6 +749,7 @@ try {
     Remove-Item (Join-Path $app 'config.json.corrupt') -ErrorAction SilentlyContinue
     if (-not $KeepOnScreen) { $env:JHP_OFFSCREEN = '1' }
     $proc2 = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
+    [FocusWatch]::Add([uint32]$proc2.Id)
     Remove-Item Env:\JHP_OFFSCREEN -ErrorAction SilentlyContinue
     $alive = $false
     for ($i = 0; $i -lt 40; $i++) {
@@ -726,6 +773,7 @@ try {
     function Start-AndClose([scriptblock]$beforeClose) {
         if (-not $KeepOnScreen) { $env:JHP_OFFSCREEN = '1' }
         $pp = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
+    [FocusWatch]::Add([uint32]$pp.Id)
         Remove-Item Env:\JHP_OFFSCREEN -ErrorAction SilentlyContinue
         $up = $false
         for ($i = 0; $i -lt 40; $i++) {
@@ -758,6 +806,10 @@ try {
 finally {
     if (-not $proc.HasExited) { $proc.Kill() }
 }
+
+[FocusWatch]::Stop()
+$fw = @([FocusWatch]::Events)
+Check 'focus: 테스트 중 JHP 창이 포그라운드가 되거나 화면 안에 보이지 않음' ($fw.Count -eq 0) ($fw -join ' | ')
 
 $fail = @($results | Where-Object { -not $_.Pass })
 Write-Host ''

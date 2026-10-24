@@ -59,7 +59,8 @@ dotnet build JHP/JHP.csproj                                         # 0 오류�
 dotnet test JHP.Tests/JHP.Tests.csproj                              # 단위 57개
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/ui-test.ps1 -OutDir <캡처폴더> [-SkipBuild] [-IncludeMenu]
 ```
-- 기준선(2026-10-12): 빌드 0 오류, 단위 57/57, UI 기본 약 61항목 / `-IncludeMenu` 78항목(브라우저 기록 삭제 항목 포함).
+- 기준선(2026-10-24): 빌드 0 오류, 단위 57/57, UI 기본 62항목(마지막 `focus:` 포함, 연속 2회 통과) / `-IncludeMenu`는 사이트·메뉴 항목이 더해짐.
+- **포커스 안 뺏는 테스트(2026-10-24)**: `FocusWatch`가 포그라운드 이동·화면 안 노출을 측정해 `focus:` 검사로 보고한다. 알람 설정창 조작은 UIA 대신 `BM_CLICK`/`WM_SETTEXT`/마우스 메시지, 앱은 테스트 모드(`JHP_OFFSCREEN=1`)에서 화면 밖 생성·`WS_EX_NOACTIVATE`·`FocusWeb()`·Clamp/툴팁/최대화 생략. 자세한 원인과 규칙은 `CLAUDE.md`의 '포커스·화면 노출 측정' 항목.
 - `-IncludeMenu`는 메뉴 팝업이 사용자 화면에 잠깐 보이고 포커스를 건드릴 수 있어, 사용자가 요청할 때만 실행.
 - **알려진 불안정**: UI 테스트가 실행마다 다른 항목(숫자 입력, 읽기 전용/잠김 설정 종료, 타이머 색)에서 간헐적으로 실패하고 재실행하면 통과함. 사용자가 PC를 조작하지 않아도 발생 → 코드 회귀가 아니라 타이밍 문제로 추정, **원인 미확정**. 해결안: 스크립트에 구간 선택 옵션(`-Only`) 추가 후 실패 구간만 반복, 불안정한 검사에 대기/재시도 추가.
 - `tools/ui-test.ps1`: "alarm controls not found"는 FAIL로 기록, UIA 시간 초과는 SKIP(건수 표시). 컨트롤 이름/구조를 바꾸면 SKIP/FAIL을 확인할 것.

@@ -14,6 +14,20 @@ public static class DarkMessageBox
     private sealed class MessageForm : Form
     {
         private readonly DialogResult _closeResult;
+        private static readonly bool TestOffscreen = Environment.GetEnvironmentVariable("JHP_OFFSCREEN") == "1";
+
+        protected override bool ShowWithoutActivation => TestOffscreen;
+
+        protected override CreateParams CreateParams   // 자동 테스트에서는 활성화되지 않는 창으로 만든다(WS_EX_NOACTIVATE)
+        {
+            get
+            {
+                var cp = base.CreateParams;
+                if (TestOffscreen) cp.ExStyle |= 0x08000000;
+                return cp;
+            }
+        }
+
 
         public MessageForm(string text, string caption, MessageBoxButtons buttons)
         {

@@ -30,9 +30,26 @@ public partial class Form1 : Form
 
     protected override bool ShowWithoutActivation => Program.TestOffscreen;
 
+    protected override CreateParams CreateParams   // 자동 테스트에서는 활성화되지 않는 창으로 만든다(WS_EX_NOACTIVATE): 창이 만들어질 때 포그라운드가 되는 것을 막는다
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            if (Program.TestOffscreen) cp.ExStyle |= 0x08000000;
+            return cp;
+        }
+    }
+
+
     public Form1()
     {
         InitializeComponent();
+        if (Program.TestOffscreen)   // 창이 만들어지는 순간부터 화면 밖에 있게 한다(기본 위치에 잠깐 뜨는 것 방지)
+        {
+            StartPosition = FormStartPosition.Manual;
+            Location = new Point(-20000, 0);
+            toolTip.Active = false;   // 호버 툴팁은 화면 왼쪽 위로 밀려 올라와 사용자 화면에 보인다
+        }
         CreateNextAlarmLabel();
         Icon = Program.AppIcon ?? Icon; // 작업 표시줄/Alt+Tab 아이콘 (Form 기본 아이콘 대신 exe에 포함된 앱 아이콘)
         Load += Form1_Load;
@@ -86,13 +103,16 @@ public partial class Form1 : Form
 
         // 자동 테스트용: 환경 변수 JHP_OFFSCREEN=1이면 창을 처음부터 화면 밖에 띄워 사용자의 화면에 보이지 않게 한다.
         if (Environment.GetEnvironmentVariable("JHP_OFFSCREEN") == "1")
+        {
+            StartPosition = FormStartPosition.Manual;   // 기본 위치(화면 안)로 한 번 뜨지 않게
             Location = new Point(-20000, 0);
+        }
 
         LayoutTitleBar();
         ApplyHotkey();
 
         // 최대화 복원은 웹뷰 초기화 전에 해서, 일반 크기로 떴다가 커지는 깜빡임을 줄인다.
-        if (_config.IsMaximize)
+        if (_config.IsMaximize && !Program.TestOffscreen)   // 자동 테스트(화면 밖)에서는 최대화하지 않는다: 최대화하면 모니터 위로 올라온다
         {
             UpdateMaximizedBounds();
             WindowState = FormWindowState.Maximized;
@@ -105,10 +125,17 @@ public partial class Form1 : Form
         CheckUpdateAsync();
     }
 
+    // 웹 화면으로 키보드 포커스를 돌려 준다. SetFocus는 창을 활성화(포그라운드 이동)할 수 있어 자동 테스트에서는 건너뛴다.
+    private void FocusWeb()
+    {
+        if (!Program.TestOffscreen) webView.Focus();
+    }
+
     // 설정 저장 실패는 첫 번째 한 번만 알린다. 모달 대화상자 대신 타이틀바 아래 툴팁으로 잠깐 보여 준다(사냥 중 방해 최소화).
     private void ShowNotice(string message)
     {
         if (IsDisposed || !IsHandleCreated) return;
+        if (Program.TestOffscreen) return;   // 자동 테스트: 툴팁은 화면 가장자리로 밀려 올라와 사용자 화면에 보이므로 띄우지 않는다
         BeginInvoke(() =>
         {
             try { float s = DeviceDpi / 96f; toolTip.Show(message, this, (int)(12 * s), (int)(44 * s), 10000); } catch { }
@@ -198,7 +225,7 @@ public partial class Form1 : Form
         timerButton.Click += (_, _) =>
         {
             ToggleTimer();
-            webView.Focus();   // 버튼에 포커스가 남아 영상의 Space 등 키를 가로채지 않게 한다
+            FocusWeb();   // 버튼에 포커스가 남아 영상의 Space 등 키를 가로채지 않게 한다
         };
         timerButton.RightClick += (_, _) => OpenAlarmSettings();
         SetTimerTip("클릭하여 타이머 시작\n우클릭: 알람 설정");
@@ -231,7 +258,7 @@ public partial class Form1 : Form
         };
         lblVolumeValue.MouseClick += (_, e) => ValueLabel_MouseClick("volume", lblVolumeValue, e);
         lblVolumeValue.MouseMove += (_, e) => lblVolumeValue.Cursor = e.X >= NumberPartStart(lblVolumeValue) ? Cursors.IBeam : Cursors.Hand;
-        sliderVolume.DragCompleted += (_, _) => webView.Focus();   // 마우스로 조절한 뒤 화살표 키가 영상 탐색으로 가게
+        sliderVolume.DragCompleted += (_, _) => FocusWeb();   // 마우스로 조절한 뒤 화살표 키가 영상 탐색으로 가게
 
         // 투명도 (30~100%)
         sliderOpacity.Value = Math.Clamp((int)Math.Round(_config.Opacity * 100), sliderOpacity.Minimum, sliderOpacity.Maximum);
@@ -246,7 +273,7 @@ public partial class Form1 : Form
         };
         lblOpacityValue.MouseClick += (_, e) => ValueLabel_MouseClick("opacity", lblOpacityValue, e);
         lblOpacityValue.MouseMove += (_, e) => lblOpacityValue.Cursor = e.X >= NumberPartStart(lblOpacityValue) ? Cursors.IBeam : Cursors.Hand;
-        sliderOpacity.DragCompleted += (_, _) => webView.Focus();
+        sliderOpacity.DragCompleted += (_, _) => FocusWeb();
 
         // 인라인 편집 TextBox
         tbInlineEdit.KeyDown += InlineEdit_KeyDown;
@@ -333,7 +360,7 @@ public partial class Form1 : Form
 
         if (target == "volume") ToggleFull(sliderVolume, ref _volumeRestore);
         else ToggleFull(sliderOpacity, ref _opacityRestore);
-        webView.Focus();   // 슬라이더 조작과 같이 화살표 키가 영상 탐색으로 가게
+        FocusWeb();   // 슬라이더 조작과 같이 화살표 키가 영상 탐색으로 가게
     }
 
     // 최댓값(100)이 아니면 현재 값을 기억하고 100으로, 기억해 둔 값이 있는 상태에서 100이면 원래 값으로 되돌린다.
@@ -368,7 +395,7 @@ public partial class Form1 : Form
         tbInlineEdit.Width = TextRenderer.MeasureText(widest, tbInlineEdit.Font, Size.Empty, TextFormatFlags.NoPadding).Width + Px(14);
         tbInlineEdit.Location = new Point(lbl.Left + numberLeft, (pnlTitleBar.Height - tbInlineEdit.Height) / 2);
         tbInlineEdit.Visible = true;
-        tbInlineEdit.Focus();
+        if (!Program.TestOffscreen) tbInlineEdit.Focus();   // 자동 테스트: SetFocus는 창을 활성화할 수 있어 건너뜀(입력은 메시지로 전달)
         tbInlineEdit.SelectAll();
     }
 
@@ -714,11 +741,13 @@ public partial class Form1 : Form
             form.Dispose();
         };
         form.StartPosition = FormStartPosition.Manual;
+        if (Program.TestOffscreen) form.Location = new Point(-20000, 0);   // Show 직후 (0,0)에 잠깐 뜨지 않게
         form.Show(this);
         // 배율이 적용된 뒤 크기를 기준으로 메인 창 가운데에 배치 (CenterParent는 배율 적용 전 크기로 계산돼 어긋남)
         var wa = Screen.FromControl(this).WorkingArea;
         int fx = Left + (Width - form.Width) / 2, fy = Top + (Height - form.Height) / 2;
-        form.Location = new Point(                                      // 작은 화면/가장자리에서 버튼이 화면 밖으로 나가지 않게
+        if (Program.TestOffscreen) form.Location = new Point(fx, fy);   // 자동 테스트: 메인 창을 따라 화면 밖에 두어 사용자 화면에 보이지 않게 한다
+        else form.Location = new Point(                                 // 작은 화면/가장자리에서 버튼이 화면 밖으로 나가지 않게
             Math.Clamp(fx, wa.Left, Math.Max(wa.Left, wa.Right - form.Width)),
             Math.Clamp(fy, wa.Top, Math.Max(wa.Top, wa.Bottom - form.Height)));
     }
@@ -922,6 +951,7 @@ public partial class Form1 : Form
     internal void BringToFrontFromAnotherInstance()
     {
         if (IsDisposed) return;
+        if (Program.TestOffscreen) return;   // 자동 테스트 중에는 화면 밖 창을 앞으로 가져오지 않는다(포커스 이동 방지)
         if (WindowState == FormWindowState.Minimized) WindowState = _lastNonMinimizedState;
         Activate();
     }
@@ -1175,7 +1205,7 @@ public partial class Form1 : Form
         try
         {
             webView.CoreWebView2.Navigate(url);
-            webView.Focus();   // ▼ 버튼에 포커스가 남아 Space/방향키가 메뉴로 가지 않게 웹 화면으로 돌려 준다
+            FocusWeb();   // ▼ 버튼에 포커스가 남아 Space/방향키가 메뉴로 가지 않게 웹 화면으로 돌려 준다
         }
         catch (Exception ex) { DarkMessageBox.Show(this, ex.Message, "JHP", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
     }

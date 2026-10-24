@@ -38,6 +38,17 @@ public class AlarmForm : Form
 
     protected override bool ShowWithoutActivation => Program.TestOffscreen;
 
+    protected override CreateParams CreateParams   // 자동 테스트에서는 활성화되지 않는 창으로 만든다(WS_EX_NOACTIVATE): 창이 만들어질 때 포그라운드가 되는 것을 막는다
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            if (Program.TestOffscreen) cp.ExStyle |= 0x08000000;
+            return cp;
+        }
+    }
+
+
     public AlarmForm()
     {
         InitializeComponent();
