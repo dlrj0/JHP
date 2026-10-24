@@ -10,7 +10,20 @@ var menu = new ContextMenuStrip { Opacity = 0 };
 var item = new LogItem("site item with a long text", log);
 item.Click += (_, _) => log.Add(">>> NAVIGATE (Click handler ran)");
 item.DeleteRequested += () => { log.Add(">>> DELETE requested"); menu.Close(); };
-item.ManageRequested += () => { log.Add(">>> MANAGE MENU requested"); menu.Close(); };
+ContextMenuStrip? manage = null;
+item.ManageRequested += () =>
+{
+    log.Add(">>> MANAGE MENU requested");
+    menu.Close();
+    form.BeginInvoke(() =>
+    {
+        manage = new ContextMenuStrip { Opacity = 0 };
+        manage.Items.Add(new ToolStripMenuItem("manage item"));
+        manage.Closed += (_, e) => log.Add($">>> manage menu closed, reason={e.CloseReason}");
+        manage.Show(new Point(-19000, 100));
+        log.Add($">>> manage shown, visible={manage.Visible}");
+    });
+};
 menu.Items.Add(item);
 menu.Items.Add(new ToolStripMenuItem("other"));
 void Pump() { for (int i = 0; i < 8; i++) { Application.DoEvents(); Thread.Sleep(30); } }
@@ -26,6 +39,10 @@ Native.SendMessage(menu.Handle, 0x0204, (IntPtr)2, lp); Pump();
 Native.SendMessage(menu.Handle, 0x0205, IntPtr.Zero, lp); Pump();
 foreach (var l in log) Console.WriteLine(l);
 Console.WriteLine($"menu visible after right click = {menu.Visible}");
+Pump(); Pump();
+foreach (var l in log) Console.WriteLine("later: " + l);
+Console.WriteLine($"manage visible later = {manage?.Visible}");
+manage?.Close(); Pump();
 
 if (!menu.Visible) { menu.Show(form, new Point(10, 10)); Pump(); }
 b = item.Bounds; lp = (IntPtr)((b.Y + 5) << 16 | (b.X + 10));

@@ -1326,11 +1326,12 @@ public partial class Form1 : Form
         menu.Items.Add(new ToolStripSeparator());
         Add("삭제…", true, () => ConfirmAndDeleteSite(site));
 
-        // 이동/지정/수정을 하면(취소 포함) ▼ 메뉴를 다시 열어 갱신된 목록을 보여 준다. 메뉴 밖을 눌러 닫은 경우는 열지 않음.
-        menu.Closed += (_, _) => BeginInvoke(() =>
+        // 이동/지정/수정을 하면(취소 포함) ▼ 메뉴를 다시 열어 갱신된 목록을 보여 준다.
+        // Esc로 닫은 경우도 목록으로 돌아간다. 메뉴 밖을 눌러 닫은 경우는 열지 않음.
+        menu.Closed += (_, e) => BeginInvoke(() =>
         {
             menu.Dispose();
-            if (acted) OpenSiteMenu();
+            if (acted || e.CloseReason == ToolStripDropDownCloseReason.Keyboard) OpenSiteMenu();
         });
         menu.Show(screenPos);
     }
