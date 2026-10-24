@@ -22,6 +22,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\ui-test.ps1 -OutDir <�
 - **WebView2 안쪽을 조작해야 할 때**(다른 프로젝트 AniShelf에서 쓰는 방법, JHP에서는 아직 안 씀): OS 입력 대신 CDP(`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=<포트> --mute-audio`, 별도 `WEBVIEW2_USER_DATA_FOLDER`)로 `Runtime.evaluate`/`Input.dispatchMouseEvent`/`Input.dispatchKeyEvent`를 보낸다. 포커스가 필요 없어 사용자가 키보드·마우스를 써도 영향이 없다. 텍스트 입력은 `HTMLInputElement.prototype`의 value 세터 + `input` 이벤트.
 - 금지: `SendKeys`/`SendInput`/`keybd_event`/`mouse_event`/`SetForegroundWindow`/`AppActivate`/`AttachThreadInput`, 이름으로 프로세스 종료(자기가 띄운 PID만).
 - ▼ 메뉴 항목(시크릿 모드 전환, 브라우저 기록 삭제 대화상자, 우클릭 관리·삭제)은 팝업/모달이 사용자 화면에 보이므로 자동 테스트가 열지 않는다. 시크릿 모드는 설정 파일(`"privateMode": true`)로 시작해 표시·전용 폴더·정리만 확인한다(`ui-test.ps1` 11번 구간). 메뉴 흐름은 사용자 육안 확인 항목.
+- **ToolStrip 메뉴 항목의 클릭 이벤트 순서(실측)**: 실제 팝업(ContextMenuStrip)에서는 우클릭에도 `Click`이 오고, 순서는 `MouseDown → Click → MouseUp`이다(`MouseUp`에서 막으면 늦는다). 그래서 `SiteMenuItem`은 `MouseDown`에 버튼/✕ 영역을 기록하고 `OnClick`에서 버린다. 메뉴 항목 동작을 바꿀 때는 `tools/menu-probe`(투명도 0 팝업 + 메시지로 클릭, 화면에 보이지 않음; `dotnet build -p:OutDir=<스크래치 폴더>`)로 이벤트 순서를 먼저 확인한다.
 - 단위 테스트: `dotnet test JHP.Tests/JHP.Tests.csproj` (57개; 순수 로직: AlarmScheduler/Config/Site·SiteListOps/UpdateChecker/DarkMessageBox)
 - 사용자가 쓰는 JHP가 실행 중이면 `JHP/bin`의 DLL이 잠겨 빌드가 실패합니다. 이때는 `-p:OutDir=<다른 폴더>\`로 빌드하세요.
 

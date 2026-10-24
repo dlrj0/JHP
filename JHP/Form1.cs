@@ -1386,19 +1386,25 @@ public partial class Form1 : Form
             SiteInfo = site;
         }
 
-        // WinForms는 메뉴 항목의 우클릭에도 Click 이벤트를 발생시킨다(OnMouseUp에서 return해도 막지 못함).
-        // 그래서 우클릭/✕ 클릭이면 이어서 오는 Click을 직접 버린다 → 사이트 이동이 일어나지 않는다.
-        private bool _suppressClick;
+        // WinForms는 메뉴 항목의 우클릭에도 Click 이벤트를 발생시키고, Click이 MouseUp보다 먼저 올 수도 있다.
+        // 그래서 순서에 기대지 않고, 마우스를 누른 시점(MouseDown)에 어떤 버튼/위치였는지 기록해 두었다가
+        // Click에서 우클릭이나 ✕ 영역 클릭이면 버린다 → 사이트 이동이 일어나지 않는다. 키보드(Enter)로 실행하면 기록이 없어 정상 이동한다.
+        private MouseButtons _downButton = MouseButtons.None;
+        private bool _downInDeleteZone;
 
         protected override void OnMouseDown(MouseEventArgs mea)
         {
-            _suppressClick = false;
+            _downButton = mea.Button;
+            _downInDeleteZone = mea.Button == MouseButtons.Left && mea.X >= Width - DeleteZoneWidth;
             base.OnMouseDown(mea);
         }
 
         protected override void OnClick(EventArgs e)
         {
-            if (_suppressClick) { _suppressClick = false; return; }
+            bool ignore = _downButton == MouseButtons.Right || _downInDeleteZone;
+            _downButton = MouseButtons.None;
+            _downInDeleteZone = false;
+            if (ignore) return;
             base.OnClick(e);
         }
 
@@ -1406,13 +1412,11 @@ public partial class Form1 : Form
         {
             if (mea.Button == MouseButtons.Right)
             {
-                _suppressClick = true;
                 ManageRequested?.Invoke(this, EventArgs.Empty);
                 return; // 우클릭은 이동(Click) 없이 관리 메뉴만 연다
             }
             if (mea.Button == MouseButtons.Left && mea.X >= Width - DeleteZoneWidth)
             {
-                _suppressClick = true;
                 DeleteRequested?.Invoke(this, EventArgs.Empty);
                 return; // ✕ 영역 클릭 시 기본 Click(사이트 이동) 동작은 발생시키지 않음
             }
