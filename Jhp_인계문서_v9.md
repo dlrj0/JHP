@@ -55,7 +55,7 @@
 ## 3. 빌드 / 테스트
 
 ```
-dotnet build JHP/JHP.csproj                                         # 0 오류가 기준 (경고는 WebView2 참조 충돌 MSB3277 1건)
+dotnet build JHP/JHP.csproj                                         # 0 오류가 기준 (경고 0건: WebView2 참조 충돌 MSB3277은 csproj `NoWarn`으로 숨김)
 dotnet test JHP.Tests/JHP.Tests.csproj                              # 단위 57개
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/ui-test.ps1 -OutDir <캡처폴더> [-SkipBuild] [-IncludeMenu]
 ```

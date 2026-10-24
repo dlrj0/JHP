@@ -10,6 +10,8 @@
     <Version>1.1.0</Version>
     <AssemblyVersion>1.1.0.0</AssemblyVersion>
     <FileVersion>1.1.0.0</FileVersion>
+    <!-- WebView2.Wpf.dll이 WindowsBase 5.0을 참조해 생기는 무해한 충돌 경고(MSB3277). WPF 컨트롤은 쓰지 않으므로 숨긴다 -->
+    <NoWarn>$(NoWarn);MSB3277</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

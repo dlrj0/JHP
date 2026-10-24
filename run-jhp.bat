@@ -10,7 +10,7 @@ set "EXE=%ROOT%app\JHP.exe"
 if /i "%~1"=="fast" goto :start
 
 echo Publishing JHP...
-dotnet publish "%ROOT%JHP\JHP.csproj" -p:PublishProfile=win-x64 -nologo -v q
+dotnet publish "%ROOT%JHP\JHP.csproj" -p:PublishProfile=win-x64 -nologo -v q -clp:ErrorsOnly
 if errorlevel 1 (
   if exist "%EXE%" (
     echo Publish failed ^(JHP may be running from this folder^). Starting the last published build.
