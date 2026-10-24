@@ -54,7 +54,11 @@ public static class FocusWatch {
   static readonly HashSet<string> seen = new HashSet<string>();
   public static readonly List<string> Events = new List<string>();
   static System.Threading.Thread t; static volatile bool stop;
-  public static void Add(uint pid) { lock (pids) pids.Add(pid); }
+  static readonly Dictionary<uint, string> names = new Dictionary<uint, string>();
+  // name: 어느 테스트 인스턴스인지(기록에 함께 남는다)
+  static readonly Dictionary<uint, long> started = new Dictionary<uint, long>();
+  public static void Add(uint pid, string name) { lock (pids) { pids.Add(pid); names[pid] = name; started[pid] = Environment.TickCount; } }
+  static string Name(uint pid) { lock (pids) { string n; long t; names.TryGetValue(pid, out n); started.TryGetValue(pid, out t); return (n ?? "?") + " 시작+" + (Environment.TickCount - t) + "ms"; } }
   static readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
   static void Log(string key, string text) { lock (Events) { if (seen.Add(key)) Events.Add((clock.ElapsedMilliseconds / 1000) + "s " + text); } }
   static string Title(IntPtr h) { var sb = new StringBuilder(256); Win.GetWindowText(h, sb, 256); return sb.ToString(); }
@@ -65,12 +69,12 @@ public static class FocusWatch {
         try {
           uint[] ps; lock (pids) { ps = new uint[pids.Count]; pids.CopyTo(ps); }
           var fg = GetForegroundWindow(); uint fpid; Win.GetWindowThreadProcessId(fg, out fpid);
-          foreach (var p in ps) if (p == fpid) Log("fg" + fg, "포그라운드가 됨: '" + Title(fg) + "' (pid " + p + ", 사용자 입력 후 " + IdleMs() + "ms)");
+          foreach (var p in ps) if (p == fpid) Log("fg" + fg, "포그라운드가 됨: '" + Title(fg) + "' (" + Name(p) + " pid " + p + ", 사용자 입력 후 " + IdleMs() + "ms)");
           int vl = GetSystemMetrics(76), vt = GetSystemMetrics(77), vr = vl + GetSystemMetrics(78), vb = vt + GetSystemMetrics(79);
           foreach (var p in ps) foreach (var h in Win.TopWindows(p)) {
             Win.RECT r; Win.GetWindowRect(h, out r);
             if (r.R > vl && r.L < vr && r.B > vt && r.T < vb && r.R > r.L && r.B > r.T)
-              Log("on" + h, "화면 안에 보임(pid " + p + "): '" + Title(h) + "' L=" + r.L + " T=" + r.T + " R=" + r.R + " B=" + r.B);
+              Log("on" + h, "화면 안에 보임(" + Name(p) + " pid " + p + "): '" + Title(h) + "' L=" + r.L + " T=" + r.T + " R=" + r.R + " B=" + r.B);
           }
         } catch { }
         System.Threading.Thread.Sleep(40);
@@ -106,7 +110,7 @@ Remove-Item (Join-Path $app 'config.json') -ErrorAction SilentlyContinue   # 첫
 # 앱이 처음부터 화면 밖(-20000,0)에 뜨도록 한다 (실행 직후 사용자의 화면에 잠깐 보이는 것을 막음)
 if (-not $KeepOnScreen) { $env:JHP_OFFSCREEN = '1' }
 $proc = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
-[FocusWatch]::Add([uint32]$proc.Id); [FocusWatch]::Start()   # 포커스/화면 노출 감시 시작 (결과는 맨 끝 'focus:' 검사)
+[FocusWatch]::Add([uint32]$proc.Id, 'proc'); [FocusWatch]::Start()   # 포커스/화면 노출 감시 시작 (결과는 맨 끝 'focus:' 검사)
 Remove-Item Env:\JHP_OFFSCREEN -ErrorAction SilentlyContinue
 $main = [IntPtr]::Zero
 for ($i = 0; $i -lt 60; $i++) {
@@ -653,7 +657,7 @@ try {
     # 두 번째 인스턴스는 창을 띄우지 않고 곧 종료해야 하며, 기존 인스턴스는 계속 살아 있어야 한다.
     $env:JHP_OFFSCREEN = '1'
     $dup = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
-    [FocusWatch]::Add([uint32]$dup.Id)
+    [FocusWatch]::Add([uint32]$dup.Id, 'dup')
     Remove-Item Env:\JHP_OFFSCREEN -ErrorAction SilentlyContinue
     $dupExited = $dup.WaitForExit(8000)
     if (-not $dupExited) { try { $dup.Kill() } catch { } }
@@ -688,7 +692,7 @@ try {
         Set-Content -LiteralPath $cfgFile -Value ($txt -replace '"isHideWindowBorderOnFocusOut":\s*false', '"isHideWindowBorderOnFocusOut": true') -Encoding UTF8
         if (-not $KeepOnScreen) { $env:JHP_OFFSCREEN = '1' }
         $p3 = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
-    [FocusWatch]::Add([uint32]$p3.Id)
+    [FocusWatch]::Add([uint32]$p3.Id, 'p3')
         Remove-Item Env:\JHP_OFFSCREEN -ErrorAction SilentlyContinue
         try {
             $m3 = [IntPtr]::Zero
@@ -754,7 +758,7 @@ try {
     Remove-Item (Join-Path $app 'config.json.corrupt') -ErrorAction SilentlyContinue
     if (-not $KeepOnScreen) { $env:JHP_OFFSCREEN = '1' }
     $proc2 = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
-    [FocusWatch]::Add([uint32]$proc2.Id)
+    [FocusWatch]::Add([uint32]$proc2.Id, 'proc2')
     Remove-Item Env:\JHP_OFFSCREEN -ErrorAction SilentlyContinue
     $alive = $false
     for ($i = 0; $i -lt 40; $i++) {
@@ -778,7 +782,7 @@ try {
     function Start-AndClose([scriptblock]$beforeClose) {
         if (-not $KeepOnScreen) { $env:JHP_OFFSCREEN = '1' }
         $pp = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
-    [FocusWatch]::Add([uint32]$pp.Id)
+    [FocusWatch]::Add([uint32]$pp.Id, 'pp')
         Remove-Item Env:\JHP_OFFSCREEN -ErrorAction SilentlyContinue
         $up = $false
         for ($i = 0; $i -lt 40; $i++) {
@@ -807,6 +811,46 @@ try {
     try { $r = Start-AndClose $null } finally { Set-ItemProperty -LiteralPath $cfgPath -Name IsReadOnly -Value $false }
     Check 'robust: 읽기 전용 config.json으로도 시작되고 정상 종료됨' ($r.Up -and $r.Closed)
     Check 'robust: 읽기 전용 config.json은 종료 후에도 내용이 그대로임' ((Get-FileHash -LiteralPath $cfgPath).Hash -eq $before)
+
+    # ---------- 11. 시크릿 모드: 켜 둔 채 시작하면 표시/전용 폴더, 일반 모드로 시작하면 전용 폴더 정리 ----------
+    # 메뉴(팝업)를 열지 않고 설정 파일로 상태를 만들어 시작한다. 시크릿 모드 전환 메뉴 자체는 -IncludeMenu 때만 다룬다.
+    function Start-PrivateProbe([bool]$private) {
+        $json = '{ "privateMode": ' + $private.ToString().ToLower() + ', "volume": 40, "sites": [ { "name": "t", "url": "https://example.com" } ], "defaultSite": "t" }'
+        Set-Content -LiteralPath $cfgPath -Value $json -Encoding UTF8
+        if (-not $KeepOnScreen) { $env:JHP_OFFSCREEN = '1' }
+        $pq = Start-Process (Join-Path $app 'JHP.exe') -WorkingDirectory $app -PassThru
+        [FocusWatch]::Add([uint32]$pq.Id, 'pq')
+        Remove-Item Env:\JHP_OFFSCREEN -ErrorAction SilentlyContinue
+        $hq = [IntPtr]::Zero
+        for ($i = 0; $i -lt 40 -and $hq -eq [IntPtr]::Zero; $i++) { Start-Sleep -Milliseconds 250; $hq = Get-MainHandle $pq }
+        Start-Sleep -Milliseconds 3500   # WebView2 초기화 대기
+        return @{ Proc = $pq; Hwnd = $hq }
+    }
+    function Stop-PrivateProbe($pr) {
+        if (-not $pr.Proc.HasExited) {
+            if ($pr.Hwnd -ne [IntPtr]::Zero) { [Win]::PostMessage($pr.Hwnd, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null }
+            if (-not $pr.Proc.WaitForExit(8000)) { $pr.Proc.Kill() }
+        }
+    }
+    $privDir = Join-Path $app 'cache-private'
+    Remove-Item -LiteralPath $privDir -Recurse -Force -ErrorAction SilentlyContinue
+    $pr = Start-PrivateProbe $true
+    $hasLabel = $false
+    if ($pr.Hwnd -ne [IntPtr]::Zero) { $hasLabel = [bool](Get-Elements $pr.Hwnd | Where-Object { $_.Type -eq 'Text' -and $_.Name -eq '시크릿 모드' }) }
+    Check 'private: 시크릿 모드로 시작하면 타이틀바에 시크릿 표시가 보임' $hasLabel
+    if ($pr.Hwnd -ne [IntPtr]::Zero) { Save-Window $pr.Hwnd '09-private' | Out-Null }   # 시크릿 표시 모양 확인용
+    Check 'private: 시크릿 전용 폴더(cache-private)로 웹 화면이 시작됨' (Test-Path -LiteralPath $privDir)
+    Stop-PrivateProbe $pr
+    $cfgAfter = Get-Content -LiteralPath $cfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    Check 'private: 종료 후에도 시크릿 모드 설정이 유지됨' ($cfgAfter.privateMode -eq $true)
+    Check 'private: 시크릿 모드에서 본 주소를 설정 파일에 남기지 않음' ([string]::IsNullOrEmpty($cfgAfter.latestUrl))
+
+    $pr = Start-PrivateProbe $false
+    $hasLabel = $false
+    if ($pr.Hwnd -ne [IntPtr]::Zero) { $hasLabel = [bool](Get-Elements $pr.Hwnd | Where-Object { $_.Type -eq 'Text' -and $_.Name -eq '시크릿 모드' }) }
+    Check 'private: 일반 모드로 시작하면 시크릿 표시가 없음' (-not $hasLabel)
+    Check 'private: 일반 모드로 시작하면 이전 시크릿 폴더가 정리됨' (-not (Test-Path -LiteralPath $privDir))
+    Stop-PrivateProbe $pr
 }
 finally {
     if (-not $proc.HasExited) { $proc.Kill() }

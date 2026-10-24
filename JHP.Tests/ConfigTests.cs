@@ -118,7 +118,7 @@ public class ConfigTests : IDisposable
         var other = new Config
         {
             Width = 1, Height = 2, X = 3, Y = 4, Opacity = 0.5, Volume = 7, Rate = 3, IsMaximize = true, TopMost = true,
-            IsHideWindowBorderOnFocusOut = true, MuteVideoOnAlarm = true, HotkeyEnabled = true,
+            IsHideWindowBorderOnFocusOut = true, MuteVideoOnAlarm = true, HotkeyEnabled = true, PrivateMode = true,
             Sites = [new Site { Name = "n", Url = "https://n.com" }], DefaultSite = "n",
             AlarmEnabled = [true, true, false, false, false, false, false, false], AlarmName = "a.mp3", Tts = true,
             LatestUrl = "https://l.com", SkippedVersion = "v2"

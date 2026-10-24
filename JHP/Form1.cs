@@ -1,3 +1,4 @@
+using Microsoft.Web.WebView2.WinForms;
 using JHP.Api;
 using JHP.Asset;
 using JHP.Controls;
@@ -51,6 +52,7 @@ public partial class Form1 : Form
             toolTip.Active = false;   // 호버 툴팁은 화면 왼쪽 위로 밀려 올라와 사용자 화면에 보인다
         }
         CreateNextAlarmLabel();
+        CreatePrivateLabel();
         Icon = Program.AppIcon ?? Icon; // 작업 표시줄/Alt+Tab 아이콘 (Form 기본 아이콘 대신 exe에 포함된 앱 아이콘)
         Load += Form1_Load;
         FormClosing += Form1_FormClosing;
@@ -64,6 +66,32 @@ public partial class Form1 : Form
             // 다른 모니터로 옮긴 뒤 Win+↑ 등으로 최대화해도 해당 모니터의 작업 영역을 쓰도록 갱신
             if (WindowState == FormWindowState.Normal) UpdateMaximizedBounds();
         };
+    }
+
+    // 시크릿 모드일 때만 보이는 표시. 타이틀바 왼쪽(남은 시간 라벨 오른쪽)에 둔다.
+    private Label lblPrivate = null!;
+
+    private void CreatePrivateLabel()
+    {
+        lblPrivate = new Label
+        {
+            AutoSize = true,
+            Text = "시크릿",
+            AccessibleName = "시크릿 모드",
+            Font = lblVolumeValue.Font,
+            ForeColor = Color.FromArgb(190, 150, 255),
+            Cursor = Cursors.Default,
+            Visible = false
+        };
+        pnlTitleBar.Controls.Add(lblPrivate);
+        lblPrivate.MouseDown += TitleBar_MouseDown;
+        toolTip.SetToolTip(lblPrivate, "시크릿 모드: 웹 화면의 기록·로그인·캐시가 남지 않습니다");
+    }
+
+    private void UpdatePrivateIndicator()
+    {
+        lblPrivate.Visible = _config.PrivateMode;
+        LayoutTitleBar();
     }
 
     // 타이틀바에 항상 보이는 "다음 알람까지 남은 시간" (호버해야만 보이던 툴팁을 보완). 정지 중에는 --:--.
@@ -108,7 +136,7 @@ public partial class Form1 : Form
             Location = new Point(-20000, 0);
         }
 
-        LayoutTitleBar();
+        UpdatePrivateIndicator();   // 시크릿 모드 표시(+ LayoutTitleBar)
         ApplyHotkey();
 
         // 최대화 복원은 웹뷰 초기화 전에 해서, 일반 크기로 떴다가 커지는 깜빡임을 줄인다.
@@ -460,18 +488,50 @@ public partial class Form1 : Form
     }
 
     // ===== WebView2 =====
+    private int _webViewInitializing;   // InitWV가 진행 중인 횟수(중첩 포함). 0보다 크면 시크릿 전환을 막는다
+
     private async Task InitWV()
     {
+        _webViewInitializing++;
         try
         {
-            string cacheDir = Path.Combine(Config.DataDirectory, "cache");
-            var env = await CoreWebView2Environment.CreateAsync(userDataFolder: cacheDir);
-            await webView.EnsureCoreWebView2Async(env);
+            // 시크릿 모드는 일반 모드와 폴더를 분리하고 InPrivate(디스크에 기록·로그인을 남기지 않는 프로필)로 연다.
+            // 이전 시크릿 세션이 남긴 폴더는 시작할 때마다 지운다(비정상 종료 대비).
+            bool priv = _config.PrivateMode;
+            var wv = webView;
+            DeleteDirectoryQuiet(PrivateCacheDir);
+            try
+            {
+                var env = await CoreWebView2Environment.CreateAsync(userDataFolder: priv ? PrivateCacheDir : CacheDir);
+                if (priv)
+                {
+                    var options = env.CreateCoreWebView2ControllerOptions();
+                    options.IsInPrivateModeEnabled = true;
+                    await wv.EnsureCoreWebView2Async(env, options);
+                }
+                else
+                {
+                    await wv.EnsureCoreWebView2Async(env);
+                }
+            }
+            catch (Exception ex) when (priv && ReferenceEquals(wv, webView))
+            {
+                // 오래된 WebView2 런타임 등으로 시크릿 모드를 열지 못하면 일반 모드로 되돌린다(시크릿 시작 단계의 실패만)
+                _config.PrivateMode = false;
+                _config.Save();
+                UpdatePrivateIndicator();
+                ShowMessage($"시크릿 모드를 시작하지 못해 일반 모드로 돌아갑니다.\n{ex.GetType().Name}: {ex.Message}", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                await RecreateWebViewAsync();
+                return;
+            }
+            // 초기화를 기다리는 동안 컨트롤이 바뀌었거나(전환) 닫혔다면 이 초기화는 버린다
+            if (!ReferenceEquals(wv, webView) || wv.CoreWebView2 is null) return;
 
             webView.CoreWebView2.NavigationCompleted += (_, e) =>
             {
                 if (!e.IsSuccess) return;
                 InjectJS();
+                if (_config.PrivateMode) return;   // 시크릿 모드는 방문한 주소를 설정 파일에도 남기지 않는다
                 // 강제 종료/전원 차단에도 마지막으로 본 주소가 남도록 이동이 끝날 때마다 저장해 둔다(http/https만)
                 string? current = webView.CoreWebView2?.Source;
                 if (JHP.Api.Site.TryNormalizeUrl(current, out string normalized) && normalized != _config.LatestUrl)
@@ -519,10 +579,76 @@ public partial class Form1 : Form
         }
         catch (Exception ex)
         {
+            if (IsDisposed) return;
             DarkMessageBox.Show(this, $"WebView2 초기화 실패: {ex.GetType().Name}: {ex.Message}\n\n" +
-                $"WebView2 런타임이 설치되어 있는지, 캐시 폴더에 쓸 수 있는지 확인해주세요.\n캐시 폴더: {Path.Combine(Config.DataDirectory, "cache")}",
+                $"WebView2 런타임이 설치되어 있는지, 캐시 폴더에 쓸 수 있는지 확인해주세요.\n캐시 폴더: {CacheDir}",
                 "오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+        finally
+        {
+            _webViewInitializing--;
+        }
+    }
+
+    private static string CacheDir => Path.Combine(Config.DataDirectory, "cache");
+    private static string PrivateCacheDir => Path.Combine(Config.DataDirectory, "cache-private");
+
+    private static void DeleteDirectoryQuiet(string dir)
+    {
+        try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { }
+    }
+
+    // 브라우저 프로세스가 아직 파일을 잡고 있을 수 있어 몇 번 다시 시도한다. 끝내 못 지워도 다음 시작 때 지운다.
+    private static async Task DeleteDirectoryWithRetryAsync(string dir)
+    {
+        for (int i = 0; i < 10; i++)
+        {
+            try { if (!Directory.Exists(dir)) return; Directory.Delete(dir, true); return; }
+            catch { await Task.Delay(1000); }
+        }
+    }
+
+    // WebView2는 프로필(사용자 데이터 폴더/InPrivate)을 바꾸려면 컨트롤을 새로 만들어야 한다. 타이머와 알람은 그대로 유지된다.
+    private async Task RecreateWebViewAsync()
+    {
+        var old = webView;
+        int index = Controls.GetChildIndex(old);
+        var fresh = new WebView2 { Dock = DockStyle.Fill, DefaultBackgroundColor = Color.FromArgb(24, 24, 24) };
+        SuspendLayout();
+        Controls.Remove(old);
+        Controls.Add(fresh);
+        Controls.SetChildIndex(fresh, index);
+        webView = fresh;
+        ResumeLayout(true);
+        try { old.Dispose(); } catch { }
+        _alarmMuteActive = false;           // 이전 웹 화면에 걸었던 음소거 상태는 함께 사라졌다
+        _htmlFullscreen = false;
+        ApplyChromeVisibility();
+        await InitWV();
+    }
+
+    // ▼ 메뉴 '시크릿 모드': 켜고 끌 때마다 웹 화면이 새로 시작되고 시크릿 세션의 데이터는 사라진다.
+    private async void TogglePrivateMode()
+    {
+        if (_webViewInitializing > 0)
+        {
+            ShowMessage("웹 화면을 준비하는 중입니다. 잠시 후 다시 시도해 주세요.", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        bool turnOn = !_config.PrivateMode;
+        string text = turnOn
+            ? "시크릿 모드를 켭니다.\n\n" +
+              "• 웹 화면이 새로 시작됩니다(로그인되지 않은 상태로 시작 사이트로 이동). 타이머와 알람은 그대로 유지됩니다.\n" +
+              "• 방문 기록, 로그인, 쿠키, 캐시가 남지 않고, 프로그램을 끄거나 시크릿 모드를 끄면 모두 사라집니다.\n" +
+              "• 프로그램을 다시 켜도 시크릿 모드는 유지됩니다.\n\n켤까요?"
+            : "시크릿 모드를 끕니다.\n\n시크릿 모드에서 쓴 로그인·기록·캐시는 모두 삭제되고, 일반 모드의 웹 화면(기존 로그인 유지)으로 돌아갑니다.\n\n끌까요?";
+        if (ShowMessage(text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+        _config.PrivateMode = turnOn;
+        _config.Save();
+        UpdatePrivateIndicator();
+        await RecreateWebViewAsync();
+        if (!turnOn) _ = DeleteDirectoryWithRetryAsync(PrivateCacheDir);
     }
 
     private int _renderRecoveries;
@@ -531,7 +657,8 @@ public partial class Form1 : Form
     private string ResolveStartUrl()
     {
         // 손상/수동 편집된 주소로 시작하다 예외가 나지 않도록 http(s) 주소만 사용한다
-        if (JHP.Api.Site.TryNormalizeUrl(_config.LatestUrl, out string latest)) return latest;
+        // 시크릿 모드는 마지막 주소(일반 모드에서 본 곳)로 가지 않고 시작 사이트로 시작한다
+        if (!_config.PrivateMode && JHP.Api.Site.TryNormalizeUrl(_config.LatestUrl, out string latest)) return latest;
         var defaultSite = _config.Sites.FirstOrDefault(s => s.Name == _config.DefaultSite);
         if (defaultSite is not null && JHP.Api.Site.TryNormalizeUrl(defaultSite.Url, out string def)) return def;
         foreach (var site in _config.Sites)
@@ -794,6 +921,7 @@ public partial class Form1 : Form
                 SiteListOps.DisplayName(_config.Sites, i, _config.DefaultSite), menu.Font).Width);
         textWidth = Math.Max(textWidth, TextRenderer.MeasureText("다른 창 선택 시 테두리 안보이기", menu.Font).Width);
         textWidth = Math.Max(textWidth, TextRenderer.MeasureText("알람 울릴 때 영상 음소거", menu.Font).Width);
+        textWidth = Math.Max(textWidth, TextRenderer.MeasureText("시크릿 모드 (기록·로그인 안 남김)", menu.Font).Width);
         textWidth = Math.Max(textWidth, TextRenderer.MeasureText("전역 단축키 (Ctrl+Alt+Shift+F10)", menu.Font).Width);
         int itemWidth = textWidth + (int)(70 * DeviceDpi / 96f);
         int itemHeight = menu.Font.Height + (int)(14 * DeviceDpi / 96f); // AutoSize=false 항목은 높이를 직접 지정해야 배율에서 글자가 잘리지 않는다
@@ -857,6 +985,16 @@ public partial class Form1 : Form
             _config.Save();
         };
         menu.Items.Add(hotkeyItem);
+
+        // 체크 표시는 현재 상태를 보여 주기만 한다. 실제 전환은 확인 후(웹 화면을 새로 만든다) TogglePrivateMode가 한다.
+        var privateItem = new ToolStripMenuItem("시크릿 모드 (기록·로그인 안 남김)")
+        {
+            Checked = _config.PrivateMode,
+            AutoSize = false,
+            Size = new Size(itemWidth, itemHeight)
+        };
+        privateItem.Click += (_, _) => BeginInvoke(TogglePrivateMode);
+        menu.Items.Add(privateItem);
         menu.Items.Add(new ToolStripSeparator());   // 토글 옵션 | 설정 백업/복원 | 사이트 목록
 
         var alarmItem = new ToolStripMenuItem("알람 설정…") { AutoSize = false, Size = new Size(itemWidth, itemHeight) };
@@ -896,14 +1034,7 @@ public partial class Form1 : Form
                 menu.Close();
                 BeginInvoke(() =>
                 {
-                    if (ShowMessage($"'{site.Name}' 사이트를 목록에서 삭제할까요?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-                    {
-                        _config.Sites.Remove(site);
-                        // 시작 사이트를 지웠으면(같은 이름이 남아 있지 않으면) 지정을 해제해 이름만 남지 않게 한다
-                        if (site.Name == _config.DefaultSite && !_config.Sites.Any(s => s.Name == site.Name))
-                            _config.DefaultSite = "";
-                        _config.Save();
-                    }
+                    ConfirmAndDeleteSite(site);
                     OpenSiteMenu();
                 });
             };
@@ -927,29 +1058,33 @@ public partial class Form1 : Form
         menu.Show(btnMenu, new Point(0, btnMenu.Height));
     }
 
-    // 방문/다운로드 기록, 자동완성(입력 기록), 캐시만 지운다. 로그인(쿠키)과 사이트 저장소는 지우지 않아 로그인 상태가 유지되고,
-    // JHP 설정(config.json: 사이트 목록·알람 등)은 건드리지 않는다.
+    // 크롬처럼 지울 항목(방문/다운로드 기록, 캐시, 자동완성, 쿠키·사이트 데이터=로그인, 비밀번호, 사이트 설정)을 골라 지운다.
+    // JHP 설정(config.json: 사이트 목록·알람 등)은 어떤 항목을 골라도 건드리지 않는다.
     private async void ClearBrowserData()
     {
         var profile = webView.CoreWebView2?.Profile;
         if (profile is null) return;
 
-        var answer = ShowMessage(
-            "브라우저 기록을 삭제할까요?\n\n" +
-            "삭제: 방문 기록, 다운로드 기록, 자동완성(입력 기록), 캐시\n" +
-            "유지: 로그인 상태, 사이트 목록, 알람 등 JHP 설정\n\n" +
-            "유튜브 등 사이트 계정에 저장된 시청/검색 기록은 해당 사이트에서 따로 지워야 합니다.",
-            MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-        if (answer != DialogResult.Yes) return;
+        CoreWebView2BrowsingDataKinds kinds;
+        bool wasTopMost = TopMost;
+        TopMost = false;
+        _modalDepth++;
+        try
+        {
+            using var dlg = new BrowserDataForm();
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+            kinds = dlg.Result;
+        }
+        finally
+        {
+            _modalDepth--;
+            TopMost = wasTopMost;
+        }
 
         try
         {
-            await profile.ClearBrowsingDataAsync(
-                CoreWebView2BrowsingDataKinds.BrowsingHistory |
-                CoreWebView2BrowsingDataKinds.DownloadHistory |
-                CoreWebView2BrowsingDataKinds.GeneralAutofill |
-                CoreWebView2BrowsingDataKinds.DiskCache);
-            ShowMessage("브라우저 기록을 삭제했습니다.", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            await profile.ClearBrowsingDataAsync(kinds);
+            ShowMessage("선택한 항목을 삭제했습니다.", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
@@ -1096,6 +1231,7 @@ public partial class Form1 : Form
         imported.Width = _config.Width; imported.Height = _config.Height;
         imported.IsMaximize = _config.IsMaximize;
         imported.LatestUrl = _config.LatestUrl;
+        imported.PrivateMode = _config.PrivateMode;   // 가져온 파일이 시크릿 모드를 켜거나 끄지 않는다(웹 화면을 다시 만들어야 하므로)
         _config.Replace(imported);
 
         sliderVolume.Value = Math.Clamp(_config.Volume, sliderVolume.Minimum, sliderVolume.Maximum);
@@ -1187,6 +1323,8 @@ public partial class Form1 : Form
                 _config.DefaultSite = def;
                 return ok;
             }));
+        menu.Items.Add(new ToolStripSeparator());
+        Add("삭제…", true, () => ConfirmAndDeleteSite(site));
 
         // 이동/지정/수정을 하면(취소 포함) ▼ 메뉴를 다시 열어 갱신된 목록을 보여 준다. 메뉴 밖을 눌러 닫은 경우는 열지 않음.
         menu.Closed += (_, _) => BeginInvoke(() =>
@@ -1195,6 +1333,19 @@ public partial class Form1 : Form
             if (acted) OpenSiteMenu();
         });
         menu.Show(screenPos);
+    }
+
+    // 확인 후 사이트를 목록에서 지운다. 지웠으면 true.
+    private bool ConfirmAndDeleteSite(JHP.Api.Site site)
+    {
+        if (ShowMessage($"'{site.Name}' 사이트를 목록에서 삭제할까요?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return false;
+        _config.Sites.Remove(site);
+        // 시작 사이트를 지웠으면(같은 이름이 남아 있지 않으면) 지정을 해제해 이름만 남지 않게 한다
+        if (site.Name == _config.DefaultSite && !_config.Sites.Any(s => s.Name == site.Name))
+            _config.DefaultSite = "";
+        _config.Save();
+        return true;
     }
 
     // 목록 변경 함수를 실행하고, 실제로 바뀌었으면 저장한다.
@@ -1235,15 +1386,33 @@ public partial class Form1 : Form
             SiteInfo = site;
         }
 
+        // WinForms는 메뉴 항목의 우클릭에도 Click 이벤트를 발생시킨다(OnMouseUp에서 return해도 막지 못함).
+        // 그래서 우클릭/✕ 클릭이면 이어서 오는 Click을 직접 버린다 → 사이트 이동이 일어나지 않는다.
+        private bool _suppressClick;
+
+        protected override void OnMouseDown(MouseEventArgs mea)
+        {
+            _suppressClick = false;
+            base.OnMouseDown(mea);
+        }
+
+        protected override void OnClick(EventArgs e)
+        {
+            if (_suppressClick) { _suppressClick = false; return; }
+            base.OnClick(e);
+        }
+
         protected override void OnMouseUp(MouseEventArgs mea)
         {
             if (mea.Button == MouseButtons.Right)
             {
+                _suppressClick = true;
                 ManageRequested?.Invoke(this, EventArgs.Empty);
                 return; // 우클릭은 이동(Click) 없이 관리 메뉴만 연다
             }
             if (mea.Button == MouseButtons.Left && mea.X >= Width - DeleteZoneWidth)
             {
+                _suppressClick = true;
                 DeleteRequested?.Invoke(this, EventArgs.Empty);
                 return; // ✕ 영역 클릭 시 기본 Click(사이트 이동) 동작은 발생시키지 않음
             }
@@ -1373,6 +1542,12 @@ public partial class Form1 : Form
         lblNext.Left = timerButton.Right + Px(8);
         lblNext.Top = (h - lblNext.Height) / 2;
         int startX = lblNext.Left + nextW + Px(12);
+        if (lblPrivate is not null && lblPrivate.Visible)
+        {
+            lblPrivate.Left = startX;
+            lblPrivate.Top = (h - lblPrivate.Height) / 2;
+            startX += lblPrivate.Width + Px(12);
+        }
         int volLabelW = TextRenderer.MeasureText("볼륨 100", lblVolumeValue.Font).Width + Px(4);
         int opaLabelW = TextRenderer.MeasureText("투명도 100%", lblOpacityValue.Font).Width + Px(4);
 
@@ -1444,10 +1619,17 @@ public partial class Form1 : Form
         _config.Opacity = Opacity;
 
         // 오류 페이지(chrome-error://)나 about:blank가 저장돼 다음 실행이 빈 화면이 되지 않도록 http(s)만 저장한다
-        if (webView.CoreWebView2 is not null && JHP.Api.Site.TryNormalizeUrl(webView.CoreWebView2.Source, out string src))
+        if (!_config.PrivateMode && webView.CoreWebView2 is not null && JHP.Api.Site.TryNormalizeUrl(webView.CoreWebView2.Source, out string src))
             _config.LatestUrl = src;
 
         _config.Save();
+
+        // 시크릿 모드로 쓰던 웹 화면을 닫고 전용 폴더를 지운다(브라우저 프로세스가 아직 잡고 있으면 다음 시작 때 지워진다)
+        if (_config.PrivateMode)
+        {
+            try { webView.Dispose(); } catch { }
+            DeleteDirectoryQuiet(PrivateCacheDir);
+        }
     }
 
     // ===== 테두리 없는 창 리사이즈 =====
